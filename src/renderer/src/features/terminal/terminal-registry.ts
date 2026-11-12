@@ -88,6 +88,8 @@ interface Entry {
   fit: FitAddon
   /** Its GPU renderer, while it has one (released with `releaseWebgl`). */
   webgl?: WebglAddon
+  /** Reads the whole screen again, after output that never arrived (ADR 0070). */
+  resync?: () => void
   element: HTMLDivElement
   opened: boolean
   /** Output offset already written; -1 until the snapshot arrives. */
@@ -206,6 +208,13 @@ const writeChunk = (instanceId: string, entry: Entry, data: string, offset: numb
   const end = offset + data.length
   // Already on screen from the snapshot: nothing to draw, and nothing to wait for.
   if (end <= entry.written) return ack(instanceId, data.length)
+  // Output before this chunk never arrived (a Hiveory server closed a stream that fell behind, a
+  // dropped connection): the screen is read whole again, never drawn with a gap.
+  if (offset > entry.written && entry.resync) {
+    entry.resync()
+    entry.pending.push({ data, offset })
+    return
+  }
   entry.term.write(entry.filter(offset >= entry.written ? data : data.slice(entry.written - offset)), () => ack(instanceId, data.length))
   entry.written = end
 }
@@ -323,6 +332,8 @@ const create = (instanceId: string, needs: LayoutNeeds): Entry => {
     if (!copySelection(term)) pasteClipboard(instanceId, term)
     else term.clearSelection()
   })
+  // While this window keeps the terminal (shown, or kept 90 s off screen) it answers the program's questions (ADR 0070).
+  void api('terminal.view', { instanceId, shown: true }).catch(() => undefined)
   const entry: Entry = { term, fit, element, opened: false, written: -1, pending: [], lastSize: '', needs, visibleRows: 0, cursorHidden: false, placed: '', filter: createDarkBackgroundFilter(() => !font.italic), visible: false, inPage: false, concealed: false }
   entries.set(instanceId, entry)
   provideLinks(instanceId, term, element)
@@ -342,21 +353,29 @@ const create = (instanceId: string, needs: LayoutNeeds): Entry => {
   // A grid taller than its pane follows the cursor as the CLI redraws.
   term.onRender(() => placeGrid(entry))
 
-  void api('terminal.snapshot', { instanceId })
-    .then((snapshot) => {
-      replaying = true
-      term.write(entry.filter(snapshot.data), () => {
-        replaying = false
+  const load = (): void =>
+    void api('terminal.snapshot', { instanceId })
+      .then((snapshot) => {
+        replaying = true
+        term.write(entry.filter(snapshot.data), () => {
+          replaying = false
+        })
+        entry.written = snapshot.end
       })
-      entry.written = snapshot.end
-    })
-    .catch(() => {
-      entry.written = 0
-    })
-    .finally(() => {
-      for (const chunk of entry.pending) writeChunk(instanceId, entry, chunk.data, chunk.offset)
-      entry.pending = []
-    })
+      .catch(() => {
+        entry.written = 0
+      })
+      .finally(() => {
+        for (const chunk of entry.pending) writeChunk(instanceId, entry, chunk.data, chunk.offset)
+        entry.pending = []
+      })
+  entry.resync = () => {
+    entry.written = -1
+    entry.pending = []
+    term.reset()
+    load()
+  }
+  load()
   return entry
 }
 
@@ -538,6 +557,7 @@ export const disposeTerminal = (instanceId: string): void => {
   entry.watch?.disconnect()
   releaseWebgl(entry)
   entry.term.dispose()
+  void api('terminal.view', { instanceId, shown: false }).catch(() => undefined)
   entry.element.remove()
 }
 

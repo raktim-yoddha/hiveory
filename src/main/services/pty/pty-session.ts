@@ -78,6 +78,12 @@ export class PtySession extends EventEmitter<PtySessionEvents> {
   private unacked = 0
   private paused = false
   private stall: NodeJS.Timeout | null = null
+  /** A window on this computer draws this terminal, and so answers its questions (ADR 0070). */
+  private shown = false
+  /** Replayed output being parsed: questions in it were asked long ago and are never answered. */
+  private replaying = 0
+  /** Whether a client elsewhere (a paired desktop) may be answering instead; set by the owner. */
+  answeredElsewhere: () => boolean = () => false
 
   constructor(
     private readonly withMirror = false,
@@ -170,6 +176,17 @@ export class PtySession extends EventEmitter<PtySessionEvents> {
     else this.armStall()
   }
 
+  /**
+   * Whether a window on this computer draws this terminal (ADR 0070). While none does, Hiveory's own
+   * copy of the screen answers the program's questions (cursor position, device attributes), so a
+   * program that asks never waits for an answer nobody sends: a shell typing back one character every
+   * few seconds, an agent that never starts. A window answers for itself; answering twice would be
+   * as wrong, since the second answer would reach the program as typed input.
+   */
+  setShown(shown: boolean): void {
+    this.shown = shown
+  }
+
   /** No window draws this terminal any more (it closed): the program never waits for one. */
   unwatch(): void {
     this.watched = false
@@ -252,7 +269,7 @@ export class PtySession extends EventEmitter<PtySessionEvents> {
 
   /** Appends text that did not come from the process (e.g. a restart marker). */
   annotate(text: string): void {
-    this.append(text)
+    this.append(text, true)
   }
 
   /** Whether the program enabled bracketed paste (so pasted newlines don't submit). */
@@ -293,13 +310,23 @@ export class PtySession extends EventEmitter<PtySessionEvents> {
     // Spawning sets the first size; the next resize is paced from here.
     this.lastResizeAt = Date.now()
     if (this.withMirror && !this.mirror) {
-      this.mirror = new HeadlessTerminal({ cols, rows, scrollback: MIRROR_SCROLLBACK, allowProposedApi: true })
+      const mirror = new HeadlessTerminal({ cols, rows, scrollback: MIRROR_SCROLLBACK, allowProposedApi: true })
+      // The copy's answers to the program's questions, sent only while nobody else can answer (ADR 0070).
+      mirror.onData((answer) => {
+        if (this.shown || this.replaying > 0 || this.answeredElsewhere()) return
+        try {
+          this.process?.write(answer)
+        } catch {
+          // Exiting.
+        }
+      })
+      this.mirror = mirror
     }
     try {
       const child = this.backend.spawn({ ...pending.spec, cols, rows })
       this.process = child
-      child.onData((data) => {
-        this.append(data)
+      child.onData((data, replay) => {
+        this.append(data, replay)
         this.emit('raw', data)
       })
       child.onExit(({ exitCode, signal }) => {
@@ -332,9 +359,13 @@ export class PtySession extends EventEmitter<PtySessionEvents> {
     else this.annotate(`\r\n\x1b[31mCould not start: ${failure.message}\x1b[0m\r\n`)
   }
 
-  private append(data: string): void {
+  private append(data: string, replay = false): void {
     const offset = this.buffer.append(data)
-    this.mirror?.write(data)
+    if (replay && this.mirror) {
+      // Answers come out while this chunk is parsed, and the callback runs right after it.
+      this.replaying++
+      this.mirror.write(data, () => this.replaying--)
+    } else this.mirror?.write(data)
     if (this.outbox) {
       this.outbox.data += data
       return

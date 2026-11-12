@@ -308,6 +308,11 @@ export const requestSchemas = {
    * This computer's own window only: paired devices are never waited for (not a remote channel).
    */
   'terminal.ack': z.object({ instanceId: id, chars: z.number().int().min(1).max(100_000_000) }),
+  /**
+   * This window draws the terminal (`shown`), or no longer does (ADR 0070): while none does, Hiveory
+   * answers the program's questions itself. This computer's own window only (not a remote channel).
+   */
+  'terminal.view': z.object({ instanceId: id, shown: z.boolean() }),
   'terminal.snapshot': z.object({ instanceId: id }),
   'layout.get': z.object({ workspaceId: id }),
   'layout.apply': z.object({ workspaceId: id, operation: layoutOperationSchema }),
@@ -702,6 +707,7 @@ export interface ResponseMap {
   'terminal.write': void
   'terminal.resize': void
   'terminal.ack': void
+  'terminal.view': void
   'terminal.snapshot': TerminalSnapshot
   'layout.get': LayoutNode | null
   'layout.apply': LayoutNode | null

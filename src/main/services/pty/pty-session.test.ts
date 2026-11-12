@@ -167,3 +167,67 @@ describe('PtySession resize pacing', () => {
     session.stop()
   })
 })
+
+describe("PtySession answers a program's questions while no window does (ADR 0070)", () => {
+  /** A mirrored terminal whose program asks for the cursor position; what it is sent back is recorded. */
+  const asking = () => {
+    const sent: string[] = []
+    let print: (data: string, replay?: boolean) => void = () => undefined
+    const backend: PtyBackend = {
+      spawn: () => ({
+        onData: (l) => void (print = l),
+        onExit: () => undefined,
+        onError: () => undefined,
+        write: (d) => void sent.push(d),
+        resize: () => undefined,
+        kill: () => undefined,
+        pause: () => undefined,
+        resume: () => undefined
+      })
+    }
+    const session = new PtySession(true, backend)
+    session.start({ file: 'x', args: [], cwd: '.', env: {} })
+    session.resize(80, 24)
+    /** Lets the copy of the screen parse what was printed. */
+    const parsed = (): Promise<void> => new Promise((r) => setTimeout(r, 30))
+    return { session, sent, print: (d: string, replay?: boolean) => print(d, replay), parsed }
+  }
+
+  it('answers while no window shows the terminal', async () => {
+    const { sent, print, parsed } = asking()
+    print('hi\x1b[6n')
+    await parsed()
+    expect(sent).toEqual(['\x1b[1;3R'])
+  })
+
+  it('leaves answering to the window that shows it, so the program never gets two answers', async () => {
+    const { session, sent, print, parsed } = asking()
+    session.setShown(true)
+    print('\x1b[6n')
+    await parsed()
+    expect(sent).toEqual([])
+    session.setShown(false)
+    print('\x1b[6n')
+    await parsed()
+    expect(sent).toHaveLength(1)
+  })
+
+  it('leaves it to a paired desktop while one is connected', async () => {
+    const { session, sent, print, parsed } = asking()
+    session.answeredElsewhere = () => true
+    print('\x1b[6n')
+    await parsed()
+    expect(sent).toEqual([])
+  })
+
+  it('never answers questions in output shown again (taken back, or restored from last time)', async () => {
+    const { session, sent, print, parsed } = asking()
+    print('old\x1b[6n', true)
+    session.annotate('saved\x1b[6n')
+    await parsed()
+    expect(sent).toEqual([])
+    print('\x1b[6n')
+    await parsed()
+    expect(sent).toHaveLength(1)
+  })
+})

@@ -29,6 +29,8 @@
     "e2e:layout": "node scripts/e2e-layout.mjs",
     "e2e:perf": "node scripts/e2e-perf.mjs",
     "e2e:durability": "node scripts/e2e-durability.mjs",
+    "e2e:flows": "node scripts/e2e-flows.mjs",
+    "e2e:server": "node scripts/e2e-server.mjs",
     "mobile": "pnpm --dir mobile",
     "mobile:install": "pnpm --dir mobile install",
     "mobile:check": "pnpm --dir mobile check"

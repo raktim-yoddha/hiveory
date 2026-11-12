@@ -80,6 +80,10 @@ export const relaunch = async (extraEnv = {}, whileClosed) => {
   await launch(extraEnv)
 }
 
+/** Terminal output without its control sequences, for reading in a failure message. */
+// eslint-disable-next-line no-control-regex
+export const plain = (text) => text.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '')
+
 /** The scripts the speed and durability runs start inside terminals and chats (ADR 0066). */
 export const fixtures = join(import.meta.dirname, 'e2e-fixtures')
 /** A path as a quoted shell argument that cmd, PowerShell and bash all read the same way. */
@@ -137,7 +141,8 @@ export const stopTerminalHost = async () => {
   }
 }
 
-export const shot = (name) => page.screenshot({ path: join(shots, `${name}.png`) }).catch(() => undefined)
+// Suites without a window (the server) have no page to take.
+export const shot = (name) => page?.screenshot({ path: join(shots, `${name}.png`) }).catch(() => undefined)
 export const test = async (name, fn) => {
   const started = Date.now()
   try {

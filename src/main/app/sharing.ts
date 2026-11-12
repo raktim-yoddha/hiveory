@@ -123,6 +123,11 @@ export class Sharing {
     this.server?.broadcast(event, payload)
   }
 
+  /** A paired desktop is connected now: its window answers for the terminals it shows (ADR 0070). */
+  hasDesktopClient(): boolean {
+    return this.server?.hasDesktopClient() ?? false
+  }
+
   /**
    * Tells paired phones that an agent needs the user (ADR 0027). Only ids travel
    * (the phone shows the names itself), and never more than once a minute per agent.

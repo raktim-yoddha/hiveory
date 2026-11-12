@@ -3,7 +3,8 @@ import type { PtySpawnParams } from '@shared/host/protocol'
 
 /** One pseudo-terminal process, wherever it runs (in main, in the local host daemon, on a remote host). */
 export interface PtyHandle {
-  onData(listener: (data: string) => void): void
+  /** Output; `replay`: printed earlier, handed over when the terminal is taken back (ADR 0050). */
+  onData(listener: (data: string, replay?: boolean) => void): void
   onExit(listener: (exit: { exitCode: number | null; signal: number | null }) => void): void
   /** A spawn that fails after `spawn` returned (a host daemon reports it asynchronously). */
   onError(listener: (error: Error) => void): void

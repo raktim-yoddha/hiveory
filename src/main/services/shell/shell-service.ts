@@ -105,10 +105,21 @@ export class ShellService extends EventEmitter<ShellServiceEvents> {
     this.shells.get(id)?.pty.ack(chars)
   }
 
-  /** The window that drew the terminals is gone: no program waits for it. */
+  /** The window that drew the terminals is gone: no program waits for it, and Hiveory answers their questions (ADR 0070). */
   unwatchAll(): void {
-    for (const shell of this.shells.values()) shell.pty.unwatch()
+    for (const shell of this.shells.values()) {
+      shell.pty.unwatch()
+      shell.pty.setShown(false)
+    }
   }
+
+  /** Whether this computer's window draws the terminal (ADR 0070). */
+  setShown(id: string, shown: boolean): void {
+    this.shells.get(id)?.pty.setShown(shown)
+  }
+
+  /** Paired desktops connected now: their windows answer for the terminals they show (ADR 0070). */
+  answeredElsewhere: () => boolean = () => false
 
   /** A watching phone's size, or null when it stops watching (ADR 0048). */
   fitViewer(id: string, key: string, size: { cols: number; rows: number } | null): void {
@@ -136,6 +147,7 @@ export class ShellService extends EventEmitter<ShellServiceEvents> {
 
   private createPty(id: string): PtySession {
     const pty = new PtySession(true, this.ptyBackend)
+    pty.answeredElsewhere = () => this.answeredElsewhere()
     pty.on('data', (data, offset) => this.emit('data', id, data, offset))
     pty.on('exit', () => pty.annotate('\r\n\x1b[2m── process exited ──\x1b[0m\r\n'))
     return pty

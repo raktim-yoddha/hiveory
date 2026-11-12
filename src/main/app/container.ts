@@ -158,6 +158,8 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
   const tailscale = new Tailscale()
   const sharing = new Sharing(tailscale, log, paths.serverDevicesFile, app.getVersion())
   const runtime = new CliRuntimeManager(registry, log, paths.runtimeDir, agentEndpoint, mcpFor, ptyBackend, (id) => localHost.take(id))
+  // A paired desktop's window answers for the terminals it shows; Hiveory answers for the rest (ADR 0070).
+  runtime.answeredElsewhere = () => sharing.hasDesktopClient()
   hookServer = new HookServer((id, event, payload) => runtime.ingestHook(id, event, payload), log, join(paths.runtimeDir, 'hook-endpoint.json'))
 
   const workspaceRepo = new WorkspaceRepository(store)
@@ -295,6 +297,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
   settings = new SettingsService(store, emit)
   const updates = new UpdateService(updater, log, emit)
   const shells = new ShellService(ptyBackend, (id) => localHost.take(id)?.ptyId)
+  shells.answeredElsewhere = () => sharing.hasDesktopClient()
   const sessions = new SessionHistoryService(log)
   const usage = new UsageService(log)
   const repositories = new RepositoryService(git)

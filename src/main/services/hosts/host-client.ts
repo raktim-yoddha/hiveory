@@ -271,7 +271,7 @@ const rebuild = (failure: HostFailure): Error =>
  * process — terminals always work, isolated whenever possible.
  */
 class HostedPty implements PtyHandle {
-  private readonly dataListeners: Array<(d: string) => void> = []
+  private readonly dataListeners: Array<(d: string, replay?: boolean) => void> = []
   private readonly exitListeners: ExitListener[] = []
   private readonly errorListeners: Array<(e: Error) => void> = []
   private readonly linkListeners: Array<(linked: boolean) => void> = []
@@ -293,7 +293,7 @@ class HostedPty implements PtyHandle {
     )
   }
 
-  onData(l: (d: string) => void): void {
+  onData(l: (d: string, replay?: boolean) => void): void {
     this.dataListeners.push(l)
   }
   onExit(l: ExitListener): void {
@@ -351,7 +351,7 @@ class HostedPty implements PtyHandle {
     begin.then(
       ({ ptyId, kept }) => {
         // What it printed while nobody was attached comes first; binding then hands over what it has printed since.
-        if (kept) this.dataListeners.forEach((l) => l(kept))
+        if (kept) this.dataListeners.forEach((l) => l(kept, true))
         client.bind(ptyId, {
           data: (d) => this.dataListeners.forEach((l) => l(d)),
           exit: (e) => this.exitListeners.forEach((l) => l(e)),

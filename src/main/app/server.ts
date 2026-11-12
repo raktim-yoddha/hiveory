@@ -13,6 +13,14 @@ import type { Logger } from './logger'
 /** Calls can carry pasted attachments (base64), so the body limit matches chat.attach. */
 const MAX_BODY = 40 * 1024 * 1024
 const KEEPALIVE_MS = 15_000
+/**
+ * How far a device's event stream may fall behind before it is closed (ADR 0070). A phone too slow
+ * to read a flooding terminal would otherwise make this server hold everything it has not read: a
+ * stalled phone grew it by about 1 GB in eight seconds. Closed, the device reconnects and reads the
+ * terminal's screen whole, as after any dropped connection, so nothing is shown with a gap.
+ */
+const MAX_STREAM_BEHIND = 8 * 1024 * 1024
+
 /** Wrong pairing codes allowed per window before pairing pauses. */
 const MAX_PAIR_FAILURES = 10
 const PAIR_WINDOW_MS = 10 * 60_000
@@ -120,6 +128,8 @@ export interface HiveoryServer {
   /** Listens on exactly these addresses (same port), e.g. when the Tailscale address appears or changes. */
   setHosts(hosts: string[]): Promise<void>
   broadcast(event: string, payload: unknown): void
+  /** A paired desktop is connected now: its window answers for the terminals it shows (ADR 0070). */
+  hasDesktopClient(): boolean
   /** Paired phones that want "needs you" notifications (ADR 0027). */
   pushTokens(): string[]
   dropPushToken(token: string): void
@@ -164,7 +174,7 @@ export const startServer = async (options: ServerOptions): Promise<HiveoryServer
   const { handlers, log } = options
   const devices = new DeviceStore(options.devicesFile)
   /** Open event streams: who opened each (for revocation) and which terminal output it wants. */
-  const streams = new Map<ServerResponse, { tokenHash: string; terminal?: string }>()
+  const streams = new Map<ServerResponse, { tokenHash: string; terminal?: string; desktop: boolean }>()
   let code = ''
   let codeUntil = 0
   let failures: number[] = []
@@ -246,7 +256,7 @@ export const startServer = async (options: ServerOptions): Promise<HiveoryServer
         // A phone's data plan matters: ?terminal=<id> streams one terminal only, ?terminal=none every event but terminal output.
         const terminal = url.searchParams.get('terminal')
         const watched = terminal && /^[A-Za-z0-9_-]{1,128}$/.test(terminal) ? terminal : undefined
-        streams.set(res, { tokenHash: device.tokenHash, terminal: watched })
+        streams.set(res, { tokenHash: device.tokenHash, terminal: watched, desktop: device.scope === 'desktop' })
         // A phone watching one terminal sizes it to its screen while it watches (ADR 0048).
         const fit = watched && watched !== 'none' && device.scope === 'mobile' ? terminalSize(url.searchParams) : undefined
         const watchKey = randomUUID()
@@ -312,9 +322,17 @@ export const startServer = async (options: ServerOptions): Promise<HiveoryServer
       for (const [s, { terminal }] of streams) {
         // No filter: everything. ?terminal=none: everything but terminal output. ?terminal=<id>: that terminal's output only.
         const wanted = terminal === undefined || (terminal === 'none' ? !output : output && terminal === instance)
-        if (wanted) s.write(frame)
+        if (!wanted) continue
+        if (s.writableLength > MAX_STREAM_BEHIND) {
+          log.warn('A device fell too far behind on its event stream; closing it so it reconnects and reads the screen again')
+          streams.delete(s)
+          s.destroy()
+          continue
+        }
+        s.write(frame)
       }
     },
+    hasDesktopClient: () => [...streams.values()].some((s) => s.desktop),
     pushTokens: () => devices.pushTokens(),
     dropPushToken: (token) => devices.dropPushToken(token),
     close: () => {

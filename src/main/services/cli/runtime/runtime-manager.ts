@@ -291,10 +291,21 @@ export class CliRuntimeManager extends EventEmitter<RuntimeManagerEvents> {
     this.sessions.get(instanceId)?.pty.ack(chars)
   }
 
-  /** The window that drew the terminals is gone: no program waits for it. */
+  /** The window that drew the terminals is gone: no program waits for it, and Hiveory answers their questions (ADR 0070). */
   unwatchAll(): void {
-    for (const session of this.sessions.values()) session.pty.unwatch()
+    for (const session of this.sessions.values()) {
+      session.pty.unwatch()
+      session.pty.setShown(false)
+    }
   }
+
+  /** Whether this computer's window draws the agent's terminal (ADR 0070). */
+  setShown(instanceId: string, shown: boolean): void {
+    this.sessions.get(instanceId)?.pty.setShown(shown)
+  }
+
+  /** Paired desktops connected now: their windows answer for the terminals they show (ADR 0070). */
+  answeredElsewhere: () => boolean = () => false
 
   /** A watching phone's size, or null when it stops watching (ADR 0048). */
   fitViewer(instanceId: string, key: string, size: { cols: number; rows: number } | null): void {
@@ -349,6 +360,7 @@ export class CliRuntimeManager extends EventEmitter<RuntimeManagerEvents> {
 
   private createSession(instance: CliInstance, backend: PtyBackend = this.ptyBackend): Session {
     const session: Session = { instance, pty: new PtySession(true, backend), detector: null, details: NOT_RUNNING }
+    session.pty.answeredElsewhere = () => this.answeredElsewhere()
     session.pty.on('data', (data, offset) => this.emit('data', session.instance.id, data, offset))
     session.pty.on('raw', (data) => {
       const event = session.detector?.onOutput(data, Date.now())
