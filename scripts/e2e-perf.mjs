@@ -515,7 +515,9 @@ await test('a reply shows every line once and in order while it streams (ADR 006
   // This reply is what follows its own question on the page.
   const shown = async () => {
     const all = await page.evaluate(() => document.body.innerText)
-    const second = all.slice(all.lastIndexOf('second-question') + 1)
+    // Until the question shows, nothing of its reply does (a slow machine draws it a moment later).
+    const asked = all.lastIndexOf('second-question')
+    const second = asked < 0 ? '' : all.slice(asked + 1)
     return { numbers: [...second.matchAll(/^L(\d+) /gm)].map((m) => Number(m[1])), done: second.includes('END-OF-SECOND') }
   }
   await value('chat.send', { chatId: chatAgent.id, text: 'second-question' })
