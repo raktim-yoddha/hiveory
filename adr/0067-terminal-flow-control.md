@@ -86,5 +86,8 @@ Decided by the product owner, 2026-11-12.
   by its client (flow control) and by the line reads again only when neither holds it; a client
   that goes away releases both. The line reader in main no longer copies its buffer once per
   message, which was costly when terminals print fast in small pieces.
-- **Consequences.** A connection that never backs up (the utility process) never pauses anything.
-  The same applies to remote hosts, whose line to Hiveory is SSH.
+- **Consequences.** Measured on CI's macOS runner, two terminals flooding: a keystroke in a third
+  echoes in 25 ms (was over 3 s), the host holds 137 MB afterwards (was 536 MB), and the floods
+  print faster (18 MB/s, was 7.6), since main no longer falls behind. Windows and Linux unchanged;
+  all three pass `e2e:perf` and `e2e:durability`. A connection that never backs up (the utility
+  process) never pauses anything. The same applies to remote hosts, whose line to Hiveory is SSH.
