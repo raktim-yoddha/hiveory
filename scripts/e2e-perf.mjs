@@ -516,7 +516,10 @@ await test('a reply shows every line once and in order while it streams (ADR 006
   // This reply is what follows its own question on the page.
   const shown = async () => {
     const all = await page.evaluate(() => document.body.innerText)
-    return { numbers: [...all.matchAll(/^S(\d+) /gm)].map((m) => Number(m[1])), done: all.includes('END-OF-SECOND'), asked: all.includes('second-question') }
+    // The question may sit far above a long reply, where chat turns skip rendering (content-visibility):
+    // it is looked for in the page's content, not in what is drawn.
+    const asked = await page.evaluate(() => document.body.textContent.includes('second-question'))
+    return { numbers: [...all.matchAll(/^S(\d+) /gm)].map((m) => Number(m[1])), done: all.includes('END-OF-SECOND'), asked }
   }
   await value('chat.send', { chatId: chatAgent.id, text: 'second-question' })
   let checked = 0
