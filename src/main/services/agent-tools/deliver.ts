@@ -5,6 +5,8 @@ import type { CliRuntimeManager } from '../cli/runtime/runtime-manager'
 import { ToolError } from './tool-args'
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+/** More rows than any screen has: `screenText` counts from the bottom, so this reads the whole screen. */
+const SCREEN_ROWS = 200
 
 /**
  * Types a message into an agent and (by default) submits it: the one path shared by
@@ -60,6 +62,7 @@ export async function waitReady(
 ): Promise<'ready' | 'waiting' | 'stopped' | 'timeout'> {
   const started = Date.now()
   let idleSince: number | null = null
+  let screen = ''
   for (;;) {
     const details = deps.agents.details(agent)
     const now = Date.now()
@@ -67,8 +70,17 @@ export async function waitReady(
     if (!details.running && now - started > 5000) return 'stopped'
     if (details.running && agent.chatUi) return 'ready'
     if (details.running && details.status === 'idle') {
+      // Quiet means nothing new on screen: a CLI still drawing its start-up reads no input yet,
+      // and text typed into it then is lost (a Schedule's prompt, a message).
+      // The whole screen, not its last rows: a fresh terminal prints at the top, and its bottom rows
+      // stay blank, so a CLI that just started would never look ready.
+      const shown = deps.runtime.screenText(agent.id, SCREEN_ROWS)
+      if (shown !== screen) {
+        screen = shown
+        idleSince = now
+      }
       idleSince ??= now
-      if (now - idleSince >= 2000 && now - started >= 3000 && deps.runtime.screenText(agent.id, 5).trim()) return 'ready'
+      if (now - idleSince >= 2000 && now - started >= 3000 && screen.trim()) return 'ready'
     } else idleSince = null
     if (now - started > timeoutMs) return 'timeout'
     await sleep(250)
