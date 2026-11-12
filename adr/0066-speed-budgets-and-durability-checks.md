@@ -80,3 +80,14 @@ under output also fail outright if the app freezes (anything over one second).
 
 `HIVEORY_PERF_SOAK=<seconds>` leaves the app idle after the runs and prints memory every 20
 seconds, for chasing leaks.
+
+## Amendment (2026-11-13): the guards are required, and cover flows and the server
+
+The `guards` job has passed on Windows, macOS and Linux (after the fixes in ADR 0050's and 0067's
+amendments and ADR 0070), so it no longer runs with `continue-on-error`: a failure in it fails the
+run. It now also runs `pnpm e2e:flows` (a Schedule end to end, queued chat messages, prompts,
+presets, Sessions) and `pnpm e2e:server` (server mode driven like a paired desktop and a phone).
+Each suite runs even when an earlier one failed, so one run reports all of them. Speed numbers stay
+report-only on runners; its correctness checks (never frozen, every reply line once, no dropped GPU
+context) fail the run like the others. Whether `main` refuses unmerged failures is a repository
+setting (branch protection), not part of this workflow.

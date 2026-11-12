@@ -32,10 +32,9 @@ jobs:
       - run: pnpm test
 
   # What must survive closing Hiveory, and how fast it is (ADR 0066), in the built app on each system.
+  # A failure here fails the run (ADR 0066 amendment): it has passed on all three systems.
   guards:
-    name: Durability and speed (${{ matrix.os }})
-    # Reported, not required, until this job has run green on all three systems.
-    continue-on-error: true
+    name: Durability, flows, server and speed (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
@@ -49,7 +48,8 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm build
+      - id: build
+        run: pnpm build
       # Ubuntu 24.04 keeps unprivileged programs from the user namespaces Chromium's sandbox needs.
       - if: runner.os == 'Linux'
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
@@ -57,8 +57,20 @@ jobs:
       - name: Durability
         shell: bash
         run: ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} pnpm e2e:durability e2e-out
+      # Schedules, queued chat messages, prompts, presets and Sessions, end to end.
+      # Each suite after the first runs even when an earlier one failed, so one run reports all of them.
+      - if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        name: Flows
+        shell: bash
+        run: ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} pnpm e2e:flows e2e-out
+      # Hiveory as a server, driven like a paired desktop and a phone (no window; headless on Linux).
+      - if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        name: Server
+        shell: bash
+        run: pnpm e2e:server e2e-out
       # Runners differ too much in speed to compare against a baseline: the numbers are kept with the run.
-      - name: Speed
+      - if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        name: Speed
         shell: bash
         env:
           HIVEORY_PERF: report
