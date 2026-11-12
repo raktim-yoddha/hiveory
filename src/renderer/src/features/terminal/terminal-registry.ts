@@ -86,6 +86,8 @@ export { terminalMinWidth } from './terminal-fit'
 interface Entry {
   term: Terminal
   fit: FitAddon
+  /** Its GPU renderer, while it has one (released with `releaseWebgl`). */
+  webgl?: WebglAddon
   element: HTMLDivElement
   opened: boolean
   /** Output offset already written; -1 until the snapshot arrives. */
@@ -358,15 +360,70 @@ const create = (instanceId: string, needs: LayoutNeeds): Entry => {
   return entry
 }
 
+/**
+ * Frees a terminal's GPU renderer now. The addon's own dispose leaves its WebGL context to the
+ * garbage collector (xterm.js #6068), so contexts of closed terminals pile up: their GPU memory
+ * stays taken, and past Chromium's limit (about 16) the browser drops the oldest context, which
+ * can be a terminal still on screen. Releasing it here, as VS Code and others do, keeps both bounded.
+ */
+const releaseWebgl = (entry: Entry): void => {
+  const webgl = entry.webgl
+  if (!webgl) return
+  entry.webgl = undefined
+  const at = gpuOrder.indexOf(entry)
+  if (at >= 0) gpuOrder.splice(at, 1)
+  // ponytail: reaches into the addon's private renderer; drop once xterm.js #6069 ships in @xterm/addon-webgl.
+  const gl = (webgl as unknown as { _renderer?: { _gl?: WebGL2RenderingContext } })._renderer?._gl
+  try {
+    webgl.dispose()
+  } catch {
+    // Already torn down.
+  }
+  gl?.getExtension('WEBGL_lose_context')?.loseContext()
+}
+
+/**
+ * Terminals that keep a GPU renderer (ADR 0069). Chromium allows about 16 WebGL contexts per
+ * window and drops the oldest past that; this stays under it with room for the window's others.
+ */
+export const MAX_GPU_TERMINALS = 12
+/** Terminals with a GPU renderer, the one shown longest ago first. */
+const gpuOrder: Entry[] = []
+
+/**
+ * Keeps at most MAX_GPU_TERMINALS renderers: the ones of terminals off the page (another Worktree,
+ * a closed pane) go first, the one shown longest ago first. Terminals on the page keep theirs; going
+ * back to a Worktree seen recently finds its terminals ready to draw.
+ */
+const trimGpu = (): void => {
+  for (let i = 0; gpuOrder.length > MAX_GPU_TERMINALS && i < gpuOrder.length; ) {
+    const entry = gpuOrder[i]!
+    if (entry.element.isConnected) i++
+    else releaseWebgl(entry)
+  }
+}
+
 /** GPU rendering: crisp text and gapless box/block glyphs. Falls back to DOM if the context is lost. */
-const enableWebgl = (term: Terminal): void => {
+const enableWebgl = (entry: Entry): void => {
   try {
     const webgl = new WebglAddon()
-    webgl.onContextLoss(() => webgl.dispose())
-    term.loadAddon(webgl)
+    webgl.onContextLoss(() => {
+      if (entry.webgl === webgl) releaseWebgl(entry)
+    })
+    entry.term.loadAddon(webgl)
+    entry.webgl = webgl
+    gpuOrder.push(entry)
+    trimGpu()
   } catch {
     // DOM renderer keeps working.
   }
+}
+
+/** Shown again: its renderer is now the most recently used one, or it gets one back. */
+const touchGpu = (entry: Entry): void => {
+  if (!entry.webgl) return enableWebgl(entry)
+  gpuOrder.splice(gpuOrder.indexOf(entry), 1)
+  gpuOrder.push(entry)
 }
 
 /**
@@ -454,9 +511,10 @@ export const attachTerminal = (instanceId: string, host: HTMLElement, needs: Lay
     if (cancelled || !entry.element.isConnected) return
     if (!entry.opened) {
       entry.term.open(entry.element)
-      enableWebgl(entry.term)
       entry.opened = true
     }
+    // Back on the page: it draws on the GPU, also after its renderer was released or lost.
+    touchGpu(entry)
     fitTerminal(instanceId)
   })
   return () => {
@@ -478,6 +536,7 @@ export const disposeTerminal = (instanceId: string): void => {
   entries.delete(instanceId)
   clearTimeout(entry.idle)
   entry.watch?.disconnect()
+  releaseWebgl(entry)
   entry.term.dispose()
   entry.element.remove()
 }

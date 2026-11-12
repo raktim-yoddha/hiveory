@@ -1,6 +1,6 @@
 # Plan: Speed and memory
 
-Status: **Phase 0 (ADR 0066), flow control (ADR 0067), chat deltas (ADR 0068) and the second round of measurements (§7.2) are done** (2026-11-10); the rest is proposed. Phase 0's numbers changed
+Status: **Phase 0 (ADR 0066), flow control (ADR 0067), chat deltas and markdown by blocks (ADR 0068), the second round of measurements (§7.2) and GPU renderers (ADR 0069) are done** (2026-11-10); the rest is proposed. Phase 0's numbers changed
 the order of the work: read §3.1 and §7 before the phases in §4. Each phase gets its ADR when it
 starts (rule 29), and nothing here becomes a rule until it is in AGENTS.md / CLAUDE.md.
 
@@ -433,7 +433,7 @@ Revised after Phase 0 (§3.1). Each step ends when its goals in `pnpm e2e:perf` 
 | done | Chat deltas (ADR 0068; Phase 1 step 3) | S | `chat.sentPerCharacter`: **1** (was 128; goal 3) | paired devices still get whole replies; on-screen order checked in `e2e:perf` |
 | done | A redraw scenario, CPU per process, where the window's time goes, idle cost and the memory floor in `e2e:perf` | S | see §7.2 | none |
 | done | Markdown by blocks (ADR 0068 amendment; Phase 1 step 4) | S | `chat.windowScript` 4.4% (was 9–10), `chat.windowLayout` 2.8% (was 11), `chat.cpuWindow` 42–45% (was 50–60) | final HTML identical; every prefix checked |
-| 4 | GPU memory of terminals: find what holds it, release it for terminals off screen (Phase 5 step 3) | S–M | `memory.idle.gpu`, `memory.loaded.gpu` goals, set then | low |
+| done | GPU renderers of terminals (ADR 0069): capped at twelve, released at once | S | no WebGL context dropped across three busy Worktrees (was 16 dropped); GPU 362–382 MB there (was 432); switching as fast as before | `e2e:perf` fails if contexts are dropped |
 | 5 | Phase 6: server anywhere | M | a headless Linux server passes the suites | low |
 | not called for | Selectors, React Compiler, lazy screens (rest of Phase 1), Phase 2 (engine into `hiveoryd`), Phase 3 (direct stream), Phase 4 (SQLite), git by events (Phase 5 step 1) | | §7.2: no number points at them on this machine | |
 | open | Phase 7 (Rust), now a memory question only: the terminal host holds 105 MB idle | L | §7.2 | product owner's call |

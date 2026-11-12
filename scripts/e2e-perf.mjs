@@ -85,6 +85,11 @@ await test('start-up: an empty profile, then one with a long chat history', asyn
 // ── Probes ──────────────────────────────────────────────────────────────────────────────────
 
 await launch(env)
+/** What Chromium says about the window's GPU contexts (ADR 0069). */
+const webglWarnings = []
+page.on('console', (m) => {
+  if (/WebGL contexts|webglcontextlost/i.test(m.text())) webglWarnings.push(m.text())
+})
 
 /** CPU seconds each kind of process has used so far (the terminal host is not Electron's, so not here). */
 const cpuSeconds = async () => {
@@ -367,6 +372,41 @@ await test('switching between two worktrees with terminals', async () => {
     runs.push(await measure(primaryRow))
   }
   report('worktreeSwitch', runs)
+})
+
+await test('switching between three Worktrees of six terminals never costs a terminal its GPU renderer (ADR 0069)', async () => {
+  // Chromium keeps about 16 WebGL contexts per window and drops the oldest past that; a terminal
+  // whose context is dropped falls back to slow DOM drawing for good.
+  const project = (await value('projects.list')).find((p) => p.name === 'demo-app')
+  const names = ['many-a', 'many-b', 'many-c']
+  for (const name of names) {
+    const worktree = await value('workspaces.create', { projectId: project.id, kind: 'isolated', name, cliSelections: [], autoApprove: false })
+    for (let i = 0; i < 6; i++) await value('agents.open', { workspaceId: worktree.id, cliId: shell.id })
+  }
+  const sidebar = page.getByRole('navigation', { name: 'Workspaces' })
+  const before = webglWarnings.length
+  try {
+  for (let round = 0; round < 3; round++) {
+    for (const name of names) {
+      await sidebar.getByRole('button', { name, exact: true }).first().click()
+      await waitFor(async () => (await page.locator('.xterm-screen').count()) >= 6, `the terminals of ${name}`)
+      await page.waitForTimeout(400)
+    }
+  }
+  // Every terminal on screen draws with WebGL: a canvas that is not a 2D one.
+  const gpuDrawn = await page.evaluate(() =>
+    [...document.querySelectorAll('.xterm-screen')].map((s) => [...s.querySelectorAll('canvas')].some((c) => c.getContext('2d') === null))
+  )
+  const mb = await megabytes()
+  record('memory.manyWorktrees.gpu', mb.gpu, 'MB')
+  record('memory.manyWorktrees.window', mb.window, 'MB')
+  expect(webglWarnings.length === before, `Chromium dropped GPU contexts: ${webglWarnings.slice(before).join(' / ')}`)
+  expect(gpuDrawn.length >= 6 && gpuDrawn.every(Boolean), `terminals on screen drawn without the GPU: ${gpuDrawn.filter((d) => !d).length} of ${gpuDrawn.length}`)
+  } finally {
+    // The measurements after this one use the primary worktree's terminals.
+    await sidebar.getByRole('button', { name: 'demo-app, primary worktree' }).click()
+    await waitFor(async () => (await page.locator('.xterm-screen').count()) >= 4, 'back on the primary worktree')
+  }
 })
 
 await test('opening Settings', async () => {
