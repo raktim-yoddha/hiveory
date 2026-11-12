@@ -4,14 +4,15 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-const { lines = 20, lineChars = 100, everyMs = 100, perTick = 1, end = 'END-OF-REPLY' } = JSON.parse(readFileSync(join(import.meta.dirname, 'fake-chat-cli.json'), 'utf8'))
+const { lines = 20, lineChars = 100, everyMs = 100, perTick = 1, end = 'END-OF-REPLY', mark = 'L' } = JSON.parse(readFileSync(join(import.meta.dirname, 'fake-chat-cli.json'), 'utf8'))
 
 const filler = 'the quick brown fox jumps over the lazy dog '
 const line = (n) => {
   // Mostly prose, with a heading and a code block now and then, as replies have.
   if (n % 25 === 0) return `\n## Section ${n}\n`
   if (n % 40 === 1) return '```ts\nconst value = compute(input)\n```'
-  return `L${n} ${filler.repeat(Math.ceil(lineChars / filler.length)).slice(0, Math.max(0, lineChars - String(n).length - 2))}`
+  // `mark` starts each numbered line, so two replies on one page are told apart.
+  return `${mark}${n} ${filler.repeat(Math.ceil(lineChars / filler.length)).slice(0, Math.max(0, lineChars - String(n).length - 1 - mark.length))}`
 }
 
 let printed = 0

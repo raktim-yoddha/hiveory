@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { localEndpointPath, shortSocketDir, socketPathMax } from '../main/services/hosts/local-endpoint'
-import { publish } from './endpoint-owner'
+import { probe, publish } from './endpoint-owner'
 import { ownPrivateDir } from './socket-dir'
 
 /** The profile folder that kept the terminal host from starting on a macOS CI runner: its socket path was 108 bytes. */
@@ -67,19 +67,19 @@ describe.skipIf(process.platform === 'win32')('a private socket folder (ADR 0050
     expect(() => ownPrivateDir(target, uid + 1)).toThrow(/not a folder of this user's alone/)
   })
 
-  it('lets a daemon listen for a profile folder whose own socket path the system refuses', async () => {
+  it('a daemon for a profile folder too long for a socket is reached through the short folder', async () => {
+    // (Listening on the too-long path itself is no test: Linux refuses it, while macOS can appear to
+    // succeed and still leave clients unable to connect, which is what CI's runner showed.)
     let dir = mkdtempSync(join(tmpdir(), 'hv-sock-'))
     while (Buffer.byteLength(localEndpointPath(dir, 3)) <= socketPathMax()) dir = join(dir, 'a-rather-long-folder-name')
     mkdirSync(dir, { recursive: true })
-    // The bug: listening in the profile folder fails.
-    const direct = createServer()
-    await expect(publish(direct, localEndpointPath(dir, 3))).rejects.toThrow()
-    // The fix: a short folder of this user's own.
     const short = shortSocketDir(dir, 3, { runtimeDir: process.env.XDG_RUNTIME_DIR, tmp: tmpdir(), uid })!
     ownPrivateDir(short, uid)
+    const path = localEndpointPath(short, 3)
     const server = createServer()
-    expect(await publish(server, localEndpointPath(short, 3))).toBe(true)
-    expect(statSync(localEndpointPath(short, 3)).mode & 0o777).toBe(0o600)
+    expect(await publish(server, path)).toBe(true)
+    expect(statSync(path).mode & 0o777).toBe(0o600)
+    expect(await probe(path)).toBe('connected')
     await close(server)
   })
 })

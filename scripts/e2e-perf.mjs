@@ -511,14 +511,12 @@ await test('a reply shows every line once and in order while it streams (ADR 006
   // The window builds a streaming reply from the text added each time: what is on screen mid-reply
   // must be exactly what was printed so far.
   const lines = 24
-  chatCli.configure({ lines, everyMs: 120, end: 'END-OF-SECOND' })
+  // Its own line mark: the page also shows the reply before it, numbered with L.
+  chatCli.configure({ lines, everyMs: 120, end: 'END-OF-SECOND', mark: 'S' })
   // This reply is what follows its own question on the page.
   const shown = async () => {
     const all = await page.evaluate(() => document.body.innerText)
-    // Until the question shows, nothing of its reply does (a slow machine draws it a moment later).
-    const asked = all.lastIndexOf('second-question')
-    const second = asked < 0 ? '' : all.slice(asked + 1)
-    return { numbers: [...second.matchAll(/^L(\d+) /gm)].map((m) => Number(m[1])), done: second.includes('END-OF-SECOND') }
+    return { numbers: [...all.matchAll(/^S(\d+) /gm)].map((m) => Number(m[1])), done: all.includes('END-OF-SECOND'), asked: all.includes('second-question') }
   }
   await value('chat.send', { chatId: chatAgent.id, text: 'second-question' })
   let checked = 0
@@ -535,6 +533,8 @@ await test('a reply shows every line once and in order while it streams (ADR 006
     if (numbers.length && !done) checked++
     if (done) {
       expect(numbers.length === lines - 1, `the finished reply shows ${numbers.length} numbered lines, not ${lines - 1}`)
+      // The question belongs on screen above its reply.
+      expect((await shown()).asked, 'the question is not on screen')
       break
     }
     await page.waitForTimeout(200)
