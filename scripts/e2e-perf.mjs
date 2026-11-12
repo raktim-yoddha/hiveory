@@ -393,15 +393,17 @@ await test('switching between three Worktrees of six terminals never costs a ter
       await page.waitForTimeout(400)
     }
   }
-  // Every terminal on screen draws with WebGL: a canvas that is not a 2D one.
-  const gpuDrawn = await page.evaluate(() =>
-    [...document.querySelectorAll('.xterm-screen')].map((s) => [...s.querySelectorAll('canvas')].some((c) => c.getContext('2d') === null))
-  )
+  // Every terminal on screen draws with WebGL (a canvas that is not a 2D one), when the machine has WebGL at all.
+  const { webgl, gpuDrawn } = await page.evaluate(() => ({
+    webgl: Boolean(document.createElement('canvas').getContext('webgl2')),
+    gpuDrawn: [...document.querySelectorAll('.xterm-screen')].map((s) => [...s.querySelectorAll('canvas')].some((c) => c.getContext('2d') === null))
+  }))
+  if (!webgl) console.log('      this machine has no WebGL: terminals draw with the DOM, only dropped contexts are checked')
   const mb = await megabytes()
   record('memory.manyWorktrees.gpu', mb.gpu, 'MB')
   record('memory.manyWorktrees.window', mb.window, 'MB')
   expect(webglWarnings.length === before, `Chromium dropped GPU contexts: ${webglWarnings.slice(before).join(' / ')}`)
-  expect(gpuDrawn.length >= 6 && gpuDrawn.every(Boolean), `terminals on screen drawn without the GPU: ${gpuDrawn.filter((d) => !d).length} of ${gpuDrawn.length}`)
+  expect(gpuDrawn.length >= 6 && (!webgl || gpuDrawn.every(Boolean)), `terminals on screen drawn without the GPU: ${gpuDrawn.filter((d) => !d).length} of ${gpuDrawn.length}`)
   } finally {
     // The measurements after this one use the primary worktree's terminals.
     await sidebar.getByRole('button', { name: 'demo-app, primary worktree' }).click()
@@ -420,6 +422,8 @@ await test('opening Settings', async () => {
 })
 
 await test('budgets: every action paints within a few frames and never blocks for long', async () => {
+  // A shared CI runner is slower than any user's machine: there the numbers are reported only.
+  if (mode === 'report') return console.log('      not held (report only)')
   for (const [name, r] of Object.entries(clicks)) {
     // Four frames at 60 Hz: the click's own frame, layout, paint, and one spare for a busy machine.
     expect(r.frame <= 67, `${name}: next frame after ${r.frame} ms`)

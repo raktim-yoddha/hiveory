@@ -11,6 +11,23 @@ mkdirSync(shots, { recursive: true })
 export const sandbox = mkdtempSync(join(tmpdir(), 'hiveory-e2e-'))
 export const profile = join(sandbox, 'profile')
 export const local = join(sandbox, 'local')
+/** Where the app under test keeps its terminal host's files (paths.ts, with the environment `launch` sets). */
+export const hostDir = join(
+  process.platform === 'win32' ? join(local, 'Hiveory Dev') : process.platform === 'darwin' ? profile : join(local, 'hiveory-dev'),
+  'Runtime',
+  'hiveoryd'
+)
+/** What the terminal host wrote about itself, for a failure message: its log's end, and how long its socket path is. */
+export const hostReport = () => {
+  const socket = join(hostDir, 'hiveoryd-3.sock')
+  let log = '(no daemon.log)'
+  try {
+    log = readFileSync(join(hostDir, 'daemon.log'), 'utf8').trim().split('\n').slice(-6).join('\n      ')
+  } catch {
+    // Never started, or wrote nothing.
+  }
+  return `socket ${socket} (${Buffer.byteLength(socket)} bytes)\n      daemon.log:\n      ${log}`
+}
 
 export const results = []
 // Playwright asserts ("Target crashed") when a hidden background page it auto-attached to (a
@@ -112,7 +129,8 @@ export const stopTerminalHost = async () => {
     process.env.HIVEORY_STOP_AGENTS_ON_QUIT = '1'
   })
   await close()
-  for (let i = 0; pid && alive(pid) && i < 50; i++) await new Promise((r) => setTimeout(r, 200))
+  // Ending dozens of terminals takes a while on a slow machine (a CI runner): up to 30 s.
+  for (let i = 0; pid && alive(pid) && i < 150; i++) await new Promise((r) => setTimeout(r, 200))
   if (pid && alive(pid)) {
     console.log(`  !! the terminal host (pid ${pid}) outlived a quit that stops agents; ending it`)
     process.kill(pid)

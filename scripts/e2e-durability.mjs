@@ -6,7 +6,7 @@
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { app, durableEnv, expect, fakeChatCli, finish, fixtures, launch, relaunch, sandbox, shellPath, shot, stopTerminalHost, test, value, waitFor } from './e2e-harness.mjs'
+import { app, durableEnv, expect, fakeChatCli, finish, fixtures, hostReport, launch, relaunch, sandbox, shellPath, shot, stopTerminalHost, test, value, waitFor } from './e2e-harness.mjs'
 
 const repo = join(sandbox, 'demo-app')
 mkdirSync(repo)
@@ -60,7 +60,7 @@ await test('a terminal keeps running through quit and reopen, and comes back wit
   await value('terminal.write', { instanceId: agent.id, data: `node ${shellPath(join(fixtures, 'counter.mjs'))}\r` })
   await waitFor(async () => ticks(await screen(agent.id)).some((t) => t.tick >= 3), 'the counter runs')
   const host = await value('terminalHost.status')
-  expect(host.mode === 'daemon', `terminals run in "${host.mode}", not in the terminal host that outlives Hiveory`)
+  expect(host.mode === 'daemon', `terminals run in "${host.mode}", not in the terminal host that outlives Hiveory\n      ${hostReport()}`)
   const before = ticks(await screen(agent.id))
   const boot = before[0].boot
   const closedAt = Date.now()
