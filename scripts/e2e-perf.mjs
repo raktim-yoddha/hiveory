@@ -461,6 +461,35 @@ await test('opening Settings', async () => {
   report('settings', runs)
 })
 
+await test("opening the Worktree bar's menus (Run, Open in, Git), and again while every terminal redraws", async () => {
+  const bar = page.locator('header[aria-label="Worktree"]')
+  const menus = [bar.getByRole('button', { name: /^(More: )?Run a script/ }), bar.getByRole('button', { name: /^More: Open this worktree in/ }), bar.getByRole('button', { name: 'More: Git' })]
+  const open = async () => {
+    const runs = []
+    for (let i = 0; i < 2; i++) {
+      for (const menu of menus) {
+        if (!(await menu.count())) continue
+        runs.push(await measure(menu.first()))
+        expect(await page.getByRole('menu').count(), 'a Worktree bar menu did not open')
+        await page.keyboard.press('Escape')
+        await page.waitForTimeout(300)
+      }
+    }
+    expect(runs.length >= 4, `only ${runs.length / 2} of the bar's menus are on screen`)
+    return runs
+  }
+  report('barMenus', await open())
+  // Agents at work: full-screen redraws in all four terminals. The window's frames then wait on
+  // the terminals' drawing, so these are reported, not held to the budget.
+  for (const id of terminals) await value('terminal.write', { instanceId: id, data: `${tui('fullscreen', 30)(12)}\r` })
+  await page.waitForTimeout(2500)
+  const busy = await open()
+  const pick = (k) => median(busy.map((r) => r[k]))
+  record('click.barMenusWhileDrawing.nextFrame', pick('frame'), 'ms', { compare: false })
+  record('click.barMenusWhileDrawing.longestTask', pick('longest'), 'ms', { compare: false })
+  await page.waitForTimeout(6000)
+})
+
 await test('budgets: every action paints within a few frames and never blocks for long', async () => {
   // A shared CI runner is slower than any user's machine: there the numbers are reported only.
   if (mode === 'report') return console.log('      not held (report only)')
