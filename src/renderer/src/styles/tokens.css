@@ -75,42 +75,45 @@
 
 
   /*
-   * Tactile depth (ADR 0018 amendment 2026-11-13). Surfaces stay solid; controls are lit from
-   * above like a machined part: a hairline catch-light on the top edge, a fill that darkens a
-   * few percent toward the bottom, and a short contact shadow. Pressed controls sink (an inner
-   * shadow). Every value derives from the theme's own colors, so all themes keep their hue.
+   * Tactile depth (ADR 0018 amendment 2026-11-13). Surfaces stay solid; controls are shaped, not
+   * brightened: a control keeps its own color at the top and falls into shadow toward the bottom,
+   * with a faint catch-light on the top edge, a dark bevel on the bottom edge and a contact shadow
+   * under it. Pressed controls sink. Every value derives from the theme's own colors.
    */
-  --color-sheen: rgb(255 255 255 / 0.06);
-  --color-sheen-strong: rgb(255 255 255 / 0.11);
-  --color-shade: rgb(0 0 0 / 0.55);
-  --gradient-metal: linear-gradient(180deg, var(--color-accent-hover) 0%, var(--color-accent) 58%, color-mix(in srgb, var(--color-accent), #000 16%) 100%);
-  --gradient-metal-hover: linear-gradient(180deg, color-mix(in srgb, var(--color-accent-hover), #fff 45%) 0%, var(--color-accent-hover) 58%, var(--color-accent) 100%);
+  --color-sheen: rgb(255 255 255 / 0.045);
+  --color-sheen-strong: rgb(255 255 255 / 0.07);
+  --color-shade: rgb(0 0 0 / 0.6);
+  --gradient-metal: linear-gradient(180deg, var(--color-accent) 0%, color-mix(in srgb, var(--color-accent), #000 22%) 100%);
+  --gradient-metal-hover: linear-gradient(180deg, var(--color-accent-hover) 0%, color-mix(in srgb, var(--color-accent-hover), #000 18%) 100%);
   --gradient-surface: none;
   --gradient-bronze-line: linear-gradient(var(--color-bronze), var(--color-bronze));
   --gradient-app: none;
-  --fill-raised: linear-gradient(180deg, color-mix(in srgb, var(--color-surface-raised), #fff 7%) 0%, var(--color-surface-raised) 100%);
-  --fill-raised-hover: linear-gradient(180deg, color-mix(in srgb, var(--color-surface-hover), #fff 10%) 0%, var(--color-surface-hover) 100%);
+  --fill-raised: linear-gradient(180deg, var(--color-surface-raised) 0%, color-mix(in srgb, var(--color-surface-raised), #000 35%) 100%);
+  --fill-raised-hover: linear-gradient(180deg, var(--color-surface-hover) 0%, color-mix(in srgb, var(--color-surface-hover), #000 30%) 100%);
   --fill-icon: var(--color-surface-active);
   --fill-active: var(--color-surface-active);
-  --fill-selected: linear-gradient(180deg, color-mix(in srgb, var(--color-surface-active), #fff 6%) 0%, var(--color-surface-active) 100%);
+  --fill-selected: linear-gradient(180deg, var(--color-surface-active) 0%, color-mix(in srgb, var(--color-surface-active), #000 35%) 100%);
   --fill-accent-soft: var(--color-bronze-soft);
-  /* A chosen option or card: lit in the theme's silver accent, brighter than everything around it (ADR 0044). */
-  --fill-chosen: linear-gradient(180deg, color-mix(in srgb, var(--color-accent) 22%, var(--color-surface-active)) 0%, color-mix(in srgb, var(--color-accent) 12%, var(--color-surface-active)) 100%);
+  /* A chosen option or card: the raised fill with a breath of the theme's silver, brighter than its neighbours (ADR 0044). */
+  --fill-chosen: linear-gradient(180deg, color-mix(in srgb, var(--color-accent) 9%, var(--color-surface-active)) 0%, color-mix(in srgb, color-mix(in srgb, var(--color-accent) 9%, var(--color-surface-active)), #000 32%) 100%);
   --fill-glass-accent: var(--color-glass);
   --fill-hero: var(--color-surface-raised);
-  /* A pane, sidebar or card: only the catch-light on its top edge. */
+  /* A pane, sidebar or card: only a faint catch-light on its top edge. */
   --shadow-surface: inset 0 var(--hairline) 0 var(--color-sheen);
-  /* A raised control (secondary button, chip, key cap). */
-  --shadow-raised: inset 0 var(--hairline) 0 var(--color-sheen-strong), 0 var(--hairline) 2px var(--color-shade);
-  /* The metal (primary) button: a bright top bevel and a darker bottom one. */
+  /* A raised control (secondary button, chip, key cap): top catch-light, bottom bevel, contact shadow. */
+  --shadow-raised:
+    inset 0 var(--hairline) 0 var(--color-sheen-strong), inset 0 calc(-1 * var(--hairline)) 0 rgb(0 0 0 / 0.35),
+    0 var(--hairline) 0 rgb(0 0 0 / 0.7), 0 2px 4px -1px var(--color-shade);
+  /* The metal (primary) button: the same shape on the accent. */
   --shadow-button:
-    inset 0 var(--hairline) 0 rgb(255 255 255 / 0.55), inset 0 calc(-1 * var(--hairline)) 0 rgb(0 0 0 / 0.18), 0 var(--hairline) 2px var(--color-shade);
+    inset 0 var(--hairline) 0 rgb(255 255 255 / 0.3), inset 0 calc(-1 * var(--hairline)) 0 rgb(0 0 0 / 0.25),
+    0 var(--hairline) 0 rgb(0 0 0 / 0.7), 0 2px 4px -1px var(--color-shade);
   /* Pressed: the control sinks. */
-  --shadow-pressed: inset 0 var(--hairline) 2px var(--color-shade);
+  --shadow-pressed: inset 0 var(--hairline) 3px rgb(0 0 0 / 0.65), 0 var(--hairline) 0 var(--color-sheen);
   /* A field: a well cut into the surface. */
-  --shadow-inset: inset 0 var(--hairline) 2px rgb(0 0 0 / 0.45), 0 var(--hairline) 0 var(--color-sheen);
+  --shadow-inset: inset 0 var(--hairline) 3px rgb(0 0 0 / 0.55), 0 var(--hairline) 0 var(--color-sheen);
   /* The rim of a chosen option, in the accent. */
-  --ring-chosen: inset 0 0 0 var(--hairline) color-mix(in srgb, var(--color-accent) 45%, transparent);
+  --ring-chosen: inset 0 0 0 var(--hairline) color-mix(in srgb, var(--color-accent) 30%, transparent);
 
   /* Status: warm, muted and matte — sage for working, ochre for needs you, no glow (ADR 0049). */
   --color-idle: #7a7064;

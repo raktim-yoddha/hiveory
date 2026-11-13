@@ -142,12 +142,13 @@ bar's buttons, the tab strip's "+") read as flat "cardboard", the yellow outline
 you looked cheap, and chosen options must be silver, not yellow.
 
 - **Surfaces stay solid; controls get depth**, everywhere, from the shared tokens (no component special
-  cases): a hairline catch-light on the top edge (`--color-sheen`, `--color-sheen-strong`), a fill that
-  darkens a few percent toward the bottom (`--fill-raised`, `--fill-raised-hover`, `--fill-selected`,
+  cases): a hairline catch-light on the top edge (`--color-sheen`, `--color-sheen-strong`), a fill that keeps
+  the control's own color at the top and falls into shadow toward the bottom, never lightened toward
+  white (`--fill-raised`, `--fill-raised-hover`, `--fill-selected`,
   `--gradient-metal`), a short contact shadow (`--shadow-raised`, `--shadow-button`), a pressed state
   that sinks (`--shadow-pressed`) and fields as wells (`--shadow-inset`). Panes and cards keep only the
   catch-light (`--shadow-surface`). This is the common recipe for tactile dark UIs: an inner top
-  highlight, a subtle vertical gradient, a small dark drop shadow, inner shadow when pressed.
+  highlight, a vertical gradient, a dark bottom bevel and drop shadow, inner shadow when pressed.
 - **Chosen is silver**: a chosen option, an "on" toggle (Match case) and a chosen card are lit in the
   theme's accent (`--fill-chosen` and its rim `--ring-chosen`), never the waiting color.
 - **A pane that needs you** shows a lit silver rim with a soft ring instead of an ochre outline; its
