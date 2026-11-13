@@ -449,7 +449,10 @@ Initial version does not include:
 - The Windows jump list and the macOS dock menu list the recent Workspaces.
 - Workspace settings › Scripts: named one-line commands, started as a terminal tab named after them
   from the pane "+", Find (Run script), Workspace settings or the phone; agents use list_scripts and
-  run_script.
+  run_script. A script marked "every new worktree" also starts, beside the agents, in each worktree
+  Hiveory creates (ADR 0061 amendment 2026-11-13).
+- A new worktree gets a copy of the git-ignored files the repository's `.worktreeinclude` names
+  (`.env`, local settings; the file Codex and Claude Code read too), never overwriting a file.
 - The window reopens where it was, at its size. Files dropped on a terminal type their quoted paths.
   Ctrl+F6 / Ctrl+Shift+F6 move between the sidebar, the worktree and the side panel.
 - Ctrl+click (⌘+click) in a terminal: a web address opens in a browser pane beside it; a file of the

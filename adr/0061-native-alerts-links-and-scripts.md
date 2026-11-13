@@ -99,3 +99,30 @@ and OS notifications; T3 Code has prompt links, notifications and a badge.
   paths), so they stay with the first chat and a notice says so. Not offered while the chat is
   answering, or in a composer outside a worktree.
 - No new channel: `agents.open` with `chatUi` and `chat.send`, as opening a Chat UI and sending do.
+
+## Amendment (2026-11-13): setup scripts and `.worktreeinclude` for new worktrees
+
+Decided by the product owner, 2026-11-13, from the feature-gap research
+(`docs/research-feature-gaps-2026-11.md`, items 3 and 4): Codex, Claude desktop, Orca, Paseo and
+Superset prepare a new worktree before work starts; Hiveory made a clean checkout with no `.env`
+and no installed dependencies.
+
+- **Run in every new worktree.** A Workspace script can be marked to also run in every worktree Hiveory
+  creates (`WorkspaceScript.onCreate`; Workspace settings › Scripts, the branch-plus toggle on its row;
+  the phone's script Edit menu). Right after the worktree is made and its agents are started, each
+  marked script starts as its own terminal tab named after it, exactly as Run does
+  (`AgentService.runScript`, now shared with the `run_script` agent tool). The Primary is never created,
+  so it never runs them. A script that can't start (no terminal on that machine) shows a notice.
+- **`.worktreeinclude`.** When Hiveory creates a worktree, the git-ignored files that the repository's
+  `.worktreeinclude` names (gitignore patterns, one per line, `#` comments; the file Codex and Claude
+  Code also read) are copied from the main checkout into it. Only files Git ignores: tracked files are
+  already there and other untracked files are the user's work in progress. Existing files are never
+  overwritten and symlinks are skipped. It runs in `WorktreeService.create`, so it works on SSH hosts
+  and Hiveory servers too, and a file that can't be copied never undoes the worktree.
+- No new IPC or phone channel: the flag rides on `projects.update`'s existing `scripts` list.
+
+Consequences: setup scripts run beside the agents, not before them, so an agent that starts work at once
+may run before `pnpm install` has finished. A setup terminal is a pane, so an empty worktree with a setup
+script is no longer empty (Load preset needs it closed first). Large folders listed in `.worktreeinclude`
+(`node_modules`) are copied file by file; linking them instead (Orca's shared directories) is left for
+later.

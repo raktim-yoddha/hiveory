@@ -27,8 +27,15 @@ export const gitArgs = {
   init: () => ['init'],
   addAll: () => ['add', '-A'],
   initialCommit: () => ['commit', '--allow-empty', '-m', 'Initial commit'],
-  pushBranch: (branch: string) => ['push', '-u', 'origin', branch]
+  pushBranch: (branch: string) => ['push', '-u', 'origin', branch],
+  /** Untracked files matching the patterns in `listFile` (gitignore syntax), NUL-separated. */
+  untrackedMatching: (listFile: string) => ['ls-files', '-z', '--others', '--ignored', `--exclude-from=${listFile}`],
+  /** Which of the untracked `paths` the repository's own ignore rules ignore, NUL-separated. */
+  ignoredAmong: (paths: string[]) => ['ls-files', '-z', '--others', '--ignored', '--exclude-standard', '--', ...paths.map((p) => `:(literal)${p}`)]
 }
+
+/** Splits `-z` output into paths. */
+export const splitNul = (output: string): string[] => output.split('\0').filter(Boolean)
 
 export interface GitStatus {
   branch?: string

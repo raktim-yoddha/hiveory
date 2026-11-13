@@ -198,6 +198,13 @@ export class WorkspaceService {
     this.repo.save(workspace)
     this.agents.createInstances(workspace, input.cliSelections)
     this.emit('state.changed', { topic: 'workspaces', projectId: project.id, workspaceId: workspace.id })
+    // Setup scripts (pnpm install…) start beside the agents, each in its own terminal (ADR 0061 amendment).
+    for (const script of project.settings?.scripts ?? []) {
+      if (!script.onCreate) continue
+      this.agents.runScript(workspace.id, script).catch((error: unknown) => {
+        this.emit('app.notice', { level: 'warning', message: `Could not run ${script.name} in ${workspace.name}: ${error instanceof Error ? error.message : String(error)}` })
+      })
+    }
     return this.view(workspace)
   }
 

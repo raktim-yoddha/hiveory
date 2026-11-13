@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { CliInstance, CliRuntimeDetails } from '@shared/domain'
+import { AgentService } from '../agents/agent-service'
 import { ChatService } from '../chat/chat-service'
 import { HookServer } from '../cli/hooks/hook-server'
 import { AgentTools, type AgentToolDeps } from './agent-tools'
@@ -77,6 +78,16 @@ describe('Workspace scripts for agents (ADR 0061)', () => {
     deps.registry!.list = () => [{ id: 'claude', displayName: 'Claude Code', available: true }, ...(shell ? [{ id: 'powershell', displayName: 'PowerShell', kind: 'shell', available: true }] : [])]
     deps.agents!.rename = vi.fn()
     deps.runtime!.screenText = () => 'PS C:\\repo> '
+    // The real AgentService.runScript, over this stub's agents, terminal and CLIs.
+    const service = {
+      ...deps.agents,
+      workspaces: { get: () => ({ id: 'w1', projectId: 'p1' }), project: () => ({ id: 'p1' }) },
+      registry: deps.registry,
+      runtime: deps.runtime,
+      view: (a: unknown) => a,
+      get: (id: string) => ({ ...agent(id, 'dev'), runtime: { status: 'idle', running: true } })
+    }
+    deps.agents!.runScript = (...args: unknown[]) => (AgentService.prototype.runScript as (...a: unknown[]) => unknown).apply(service, args)
     return s
   }
 

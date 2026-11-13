@@ -62,3 +62,10 @@
   color: var(--color-danger);
   font-size: var(--text-sm);
 }
+
+/* The "every new worktree" mark, as it shows in the note above the list. */
+.inlineIcon {
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.125em;
+}

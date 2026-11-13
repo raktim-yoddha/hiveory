@@ -104,7 +104,12 @@ export const usedRepository = (project: RepositoryFacts, root = project.reposito
 export interface WorkspaceScript {
   name: string
   command: string
+  /** Also runs in a terminal of every new worktree, right after Hiveory makes it (ADR 0061 amendment). */
+  onCreate?: boolean
 }
+
+/** The script with "run in every new worktree" on or off; off leaves no key behind. */
+export const withOnCreate = ({ onCreate: _, ...script }: WorkspaceScript, on: boolean): WorkspaceScript => (on ? { ...script, onCreate: true } : script)
 
 export const MAX_SCRIPTS = 20
 export const MAX_SCRIPT_COMMAND = 2000

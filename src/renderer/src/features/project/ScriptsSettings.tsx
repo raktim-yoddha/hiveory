@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { Play, Plus, Trash2 } from 'lucide-react'
-import type { Project, WorkspaceScript } from '@shared/domain'
+import { GitBranchPlus, Play, Plus, Trash2 } from 'lucide-react'
+import { withOnCreate, type Project, type WorkspaceScript } from '@shared/domain'
 import { Button, IconButton } from '../../components/ui/Button'
 import { TextInput } from '../../components/ui/TextField'
 import { useProjects } from '../../stores/data'
@@ -38,7 +38,9 @@ export function ScriptsSettings({ project }: { project: Project }) {
     <div className={settings.group}>
       <div className={settings.groupTitle}>Scripts</div>
       <p className={settings.groupNote}>
-        Commands you run often, by name. The pane &ldquo;+&rdquo;, Find and the phone start one in a new terminal of the worktree.
+        Commands you run often, by name. The pane &ldquo;+&rdquo;, Find and the phone start one in a new terminal of the worktree. Turn on{' '}
+        <GitBranchPlus aria-hidden className={styles.inlineIcon} /> to also run it in every new worktree, such as an install. Git-ignored files listed
+        in the repository&rsquo;s <code>.worktreeinclude</code> (<code>.env</code>…) are copied into new worktrees.
       </p>
       {scripts.length > 0 && (
         <ul className={styles.list} aria-label="Scripts">
@@ -48,6 +50,13 @@ export function ScriptsSettings({ project }: { project: Project }) {
               <code className={styles.command} title={s.command}>
                 {s.command}
               </code>
+              <IconButton
+                label={s.onCreate ? `${s.name} runs in every new worktree. Stop that` : `Also run ${s.name} in every new worktree`}
+                icon={<GitBranchPlus />}
+                active={Boolean(s.onCreate)}
+                aria-pressed={Boolean(s.onCreate)}
+                onClick={() => void save(scripts.map((x) => (x.name === s.name ? withOnCreate(x, !x.onCreate) : x)))}
+              />
               {workspaceId && <IconButton label={`Run ${s.name}`} icon={<Play />} onClick={() => void runScript(workspaceId, project.id, s)} />}
               <IconButton label={`Remove ${s.name}`} icon={<Trash2 />} onClick={() => void save(scripts.filter((x) => x.name !== s.name))} />
             </li>

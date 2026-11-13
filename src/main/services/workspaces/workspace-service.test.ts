@@ -179,6 +179,24 @@ describe('workspace creation', () => {
     expect(await code(noRepo.service.create(input))).toBe('NOT_A_REPOSITORY')
     expect(await code(setup({ hasCommits: vi.fn(async () => false) }).service.create(input))).toBe('NO_COMMITS')
   })
+
+  it('runs the scripts marked for new worktrees there, and says when one cannot start (ADR 0061 amendment)', async () => {
+    const { service, agents, store } = setup()
+    store.update((s) => {
+      s.projects[0]!.settings = { scripts: [{ name: 'install', command: 'pnpm i', onCreate: true }, { name: 'dev', command: 'pnpm dev' }, { name: 'env', command: 'direnv allow', onCreate: true }] }
+    })
+    const runScript = vi.fn(async (_id: string, script: { name: string }) => (script.name === 'env' ? Promise.reject(new Error('No terminal')) : {}))
+    Object.assign(agents, { runScript })
+    const notices: unknown[] = []
+    Object.assign(service, { emit: (event: string, payload: unknown) => event === 'app.notice' && notices.push(payload) })
+    const view = await service.create(input)
+    expect(runScript.mock.calls.map(([id, s]) => [id, s.name])).toEqual([
+      [view.id, 'install'],
+      [view.id, 'env']
+    ])
+    await new Promise((r) => setTimeout(r, 0))
+    expect(notices).toEqual([{ level: 'warning', message: 'Could not run env in Amber Harbor: No terminal' }])
+  })
 })
 
 describe('a Workspace inside a larger repository (ADR 0071)', () => {

@@ -431,18 +431,9 @@ export class AgentTools implements ToolHost {
         const scripts = workspaces.project(this.caller.projectId).settings?.scripts ?? []
         const script = scripts.find((s) => s.name.toLowerCase() === name.trim().toLowerCase())
         if (!script) throw new ToolError(`No script named "${name}". Scripts: ${scripts.map((s) => s.name).join(', ') || 'none'}.`)
-        const shell = registry.list().find((c) => c.kind === 'shell' && c.available)
-        if (!shell) throw new ToolError('No terminal is installed on this machine to run the script in.')
-        const { agent } = agents.open(this.caller.workspaceId, shell.id, { targetPaneId: this.caller.id, side: 'right' }, undefined, false)
-        try {
-          agents.rename(agent.id, script.name)
-        } catch {
-          // Another pane already has that name: the terminal keeps its own.
-        }
-        // The shell prints its prompt first; then the command is typed, exactly as saved.
-        const started = Date.now()
-        while (Date.now() - started < 5000 && !runtime.screenText(agent.id, 5).trim()) await sleep(150)
-        runtime.write(agent.id, `${script.command}\r`)
+        const agent = await agents.runScript(this.caller.workspaceId, script, { targetPaneId: this.caller.id, side: 'right' }).catch((error: unknown) => {
+          throw new ToolError(error instanceof Error ? error.message : String(error))
+        })
         await sleep(int(args, 'wait_seconds', 5, 0, 60) * 1000)
         return `Started "${script.name}" (${script.command}) in a new terminal pane, ${agent.petName}.\n--- screen ---\n${runtime.screenText(agent.id, 40) || '(nothing yet)'}`
       }

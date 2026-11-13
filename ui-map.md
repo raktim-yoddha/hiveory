@@ -460,7 +460,7 @@ Sidebar: a Workspace's menu has Pin to top / Unpin; pinned Workspaces come first
 ### Native desktop (ADR 0061)
 
 Settings › Agents › Notifications: Desktop notifications (Needs you, finished, stopped | Only when an
-agent needs you | Off). Workspace settings › Scripts: each script's name, command, Run and Remove; a
+agent needs you | Off). Workspace settings › Scripts: each script's name, command, every-new-worktree toggle (branch-plus), Run and Remove; a
 name field, a command field and Add (problems shown under it). Pane "+": Browser · Chat UI · Scripts ·
 Terminals · Agents. Find: Open here › Copy a link to this worktree; Run script › <name>. Phone: Open an
-agent › Scripts; Workspace settings › Scripts (Add a script sheet: name, command; Remove).
+agent › Scripts; Workspace settings › Scripts (Add a script sheet: name, command; Edit: every new worktree on/off, Remove).

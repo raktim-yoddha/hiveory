@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Play, Plus } from 'lucide-react-native'
-import { MAX_SCRIPTS, SCRIPT_NAME, scriptCommandProblem, type WorkspaceScript } from '@shared/domain/project'
+import { MAX_SCRIPTS, SCRIPT_NAME, scriptCommandProblem, withOnCreate, type WorkspaceScript } from '@shared/domain/project'
 import { useTheme } from '@/core/theme'
 import { Button, choose, ListRow, Section, Sheet, Text, TextField } from '@/core/ui'
 
@@ -14,7 +14,7 @@ const problemOf = (name: string, command: string, scripts: WorkspaceScript[]): s
 
 /**
  * A Workspace's scripts on the phone (ADR 0061): the same named commands the computer's pane "+" runs.
- * Add one here; long-press one to remove it. A worktree's "Open an agent" runs them.
+ * Add one here; Edit turns "every new worktree" on or off, or removes it. A worktree's "Open an agent" runs them.
  */
 export function ScriptsSection({ scripts, onSave }: { scripts: WorkspaceScript[]; onSave: (next: WorkspaceScript[] | null) => void }) {
   const { colors } = useTheme()
@@ -37,14 +37,22 @@ export function ScriptsSection({ scripts, onSave }: { scripts: WorkspaceScript[]
         <ListRow
           key={s.name}
           title={s.name}
-          subtitle={s.command}
+          subtitle={s.onCreate ? `${s.command} · every new worktree` : s.command}
           leading={<Play size={18} color={colors.textMuted} />}
           action={
             <Button
-              label="Remove"
+              label="Edit"
               size="sm"
               variant="ghost"
-              onPress={() => choose(s.name, [{ label: 'Remove script', destructive: true, onPress: () => onSave(scripts.filter((x) => x.name !== s.name).length ? scripts.filter((x) => x.name !== s.name) : null) }])}
+              onPress={() =>
+                choose(s.name, [
+                  {
+                    label: s.onCreate ? "Don't run in new worktrees" : 'Also run in every new worktree',
+                    onPress: () => onSave(scripts.map((x) => (x.name === s.name ? withOnCreate(x, !x.onCreate) : x)))
+                  },
+                  { label: 'Remove script', destructive: true, onPress: () => onSave(scripts.filter((x) => x.name !== s.name).length ? scripts.filter((x) => x.name !== s.name) : null) }
+                ])
+              }
             />
           }
         />

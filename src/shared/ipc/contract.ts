@@ -183,7 +183,13 @@ export const projectSettingsPatchSchema = z.object({
   pinned: z.boolean().nullable().optional(),
   // ADR 0061: named commands, each name once.
   scripts: z
-    .array(z.object({ name: z.string().regex(SCRIPT_NAME), command: z.string().max(MAX_SCRIPT_COMMAND).refine((c) => scriptCommandProblem(c) === null, 'Use one line, without control characters.') }))
+    .array(
+      z.object({
+        name: z.string().regex(SCRIPT_NAME),
+        command: z.string().max(MAX_SCRIPT_COMMAND).refine((c) => scriptCommandProblem(c) === null, 'Use one line, without control characters.'),
+        onCreate: z.boolean().optional()
+      })
+    )
     .max(MAX_SCRIPTS)
     .refine((list) => new Set(list.map((s) => s.name.toLowerCase())).size === list.length, 'Each script needs its own name.')
     .nullable()

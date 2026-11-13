@@ -1,8 +1,14 @@
-import { mkdirSync } from 'node:fs'
-import { dirname } from 'node:path'
+import { constants, existsSync, mkdirSync } from 'node:fs'
+import { copyFile, lstat, mkdir } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
 import { AppException } from '@shared/errors'
-import { gitArgs, isBranchInUseError, isDirtyWorktreeError, isUnmergedBranchError, parseWorktreeList, type WorktreeEntry } from './git-commands'
+import { gitArgs, isBranchInUseError, isDirtyWorktreeError, isUnmergedBranchError, parseWorktreeList, splitNul, type WorktreeEntry } from './git-commands'
 import { GitCommandError, type GitService } from './git-service'
+
+/** The repository's list of git-ignored files new worktrees get a copy of; Codex and Claude Code read it too. */
+export const WORKTREE_INCLUDE = '.worktreeinclude'
+/** Paths per ignore check, well under Windows' command-line limit. */
+const CHECK_CHUNK = 100
 
 export interface CreateWorktreeInput {
   repoRoot: string
@@ -49,6 +55,36 @@ export class WorktreeService {
       }
       throw gitFailure('Could not create the worktree folder.', error, 'Check the details below, then try again.')
     }
+    // The worktree exists now; a file that can't be copied never undoes it.
+    await this.copyIncluded(input.repoRoot, input.path).catch(() => 0)
+  }
+
+  /**
+   * Copies the git-ignored files `.worktreeinclude` names (gitignore patterns: `.env`, `config/local.json`)
+   * from the main checkout into a new worktree (ADR 0061 amendment). Only ignored files: tracked ones are
+   * there already and other untracked files are work in progress. Never overwrites, skips symlinks.
+   * Returns how many files were copied.
+   */
+  async copyIncluded(repoRoot: string, path: string): Promise<number> {
+    const list = join(repoRoot, WORKTREE_INCLUDE)
+    if (!existsSync(list)) return 0
+    const matched = splitNul(await this.git.run(repoRoot, gitArgs.untrackedMatching(list)))
+    let copied = 0
+    for (let i = 0; i < matched.length; i += CHECK_CHUNK) {
+      for (const file of splitNul(await this.git.run(repoRoot, gitArgs.ignoredAmong(matched.slice(i, i + CHECK_CHUNK))))) {
+        const from = join(repoRoot, file)
+        const to = join(path, file)
+        try {
+          if ((await lstat(from)).isSymbolicLink()) continue
+          await mkdir(dirname(to), { recursive: true })
+          await copyFile(from, to, constants.COPYFILE_EXCL)
+          copied++
+        } catch {
+          // Already in the worktree, or unreadable: that file is skipped.
+        }
+      }
+    }
+    return copied
   }
 
   /** Removes a linked worktree. A dirty worktree needs `force`, so nothing is lost silently. */

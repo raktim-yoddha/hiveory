@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
-import { type CliInstance, type CliInstanceView, type CliRuntimeDetails, type CliSelection, type LayoutNode, type Side, type Workspace } from '@shared/domain'
+import { type CliInstance, type CliInstanceView, type CliRuntimeDetails, type CliSelection, type LayoutNode, type Side, type Workspace, type WorkspaceScript } from '@shared/domain'
 import { CHAT_CLI_IDS } from '@shared/domain/chat'
 import { AppException, fail } from '@shared/errors'
 import { buildGridLayout, dockPane, insertBeside, listPanes, stackPane } from '@shared/layout/operations'
@@ -15,6 +15,10 @@ import type { LayoutService } from '../layout/layout-service'
 import type { StateStore } from '../persistence/state-store'
 import type { WorkspaceRepository } from '../workspaces/workspace-repository'
 import type { KitSource } from '../workspaces/workspace-service'
+
+/** How long a new terminal may take to print its prompt before a script's command is typed anyway. */
+const SHELL_PROMPT_WAIT_MS = 5000
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
 
 export interface Placement {
   targetPaneId: string
@@ -153,6 +157,27 @@ export class AgentService {
     this.launchQuietly(instance!, workspace)
     this.emitAgents(workspace)
     return { agent: this.view(instance!), layout: next }
+  }
+
+  /**
+   * Runs a Workspace script (ADR 0061): a new terminal of the worktree's machine, named after the
+   * script, with its command typed once the shell has printed its prompt.
+   */
+  async runScript(workspaceId: string, script: WorkspaceScript, placement?: Placement): Promise<CliInstanceView> {
+    const host = this.workspaces.project(this.workspaces.get(workspaceId).projectId).host
+    const clis = host ? (await this.kits.kit(host)).registry.list() : this.registry.list()
+    const shell = clis.find((c) => c.kind === 'shell' && c.available)
+    if (!shell) fail('CLI_UNAVAILABLE', 'No terminal is installed on that machine to run the script in.')
+    const { agent } = this.open(workspaceId, shell!.id, placement, undefined, false)
+    try {
+      this.rename(agent.id, script.name)
+    } catch {
+      // Another pane already has that name: the terminal keeps its own.
+    }
+    const started = Date.now()
+    while (Date.now() - started < SHELL_PROMPT_WAIT_MS && !this.runtime.screenText(agent.id, 5).trim()) await sleep(150)
+    this.runtime.write(agent.id, `${script.command}\r`)
+    return this.view(this.get(agent.id))
   }
 
   /** Creates and launches instances for a fresh configuration, laid out as a grid. */
