@@ -117,6 +117,12 @@
   --shadow-key-pressed: inset 0 var(--hairline) 4px rgb(0 0 0 / 0.75), 0 var(--hairline) 0 rgb(255 255 255 / 0.05);
   /* A field set into a card: a well. */
   --shadow-well: inset 0 var(--hairline) 3px rgb(0 0 0 / 0.55), 0 var(--hairline) 0 rgb(255 255 255 / 0.05);
+  /* A worktree bar button: built like the steel one (rim, top edge, divider), in dark steel. */
+  --fill-key-dark: linear-gradient(180deg, color-mix(in srgb, var(--color-accent) 12%, var(--color-surface-active)) 0%, color-mix(in srgb, var(--color-accent) 4%, var(--color-surface-raised)) 100%);
+  --fill-key-dark-hover: linear-gradient(180deg, color-mix(in srgb, var(--color-accent) 18%, var(--color-surface-active)) 0%, color-mix(in srgb, var(--color-accent) 7%, var(--color-surface-raised)) 100%);
+  --shadow-key-rim:
+    inset 0 var(--hairline) 0 rgb(255 255 255 / 0.12), inset 0 calc(-1 * var(--hairline)) 0 rgb(0 0 0 / 0.45),
+    0 0 0 var(--hairline) rgb(0 0 0 / 0.55), 0 3px 6px -2px var(--key-shade);
   /* Their primary action: brushed steel with light text, never a white slab. */
   --fill-steel: linear-gradient(180deg, color-mix(in srgb, var(--color-accent) 30%, var(--color-surface-active)) 0%, color-mix(in srgb, var(--color-accent) 11%, var(--color-surface-raised)) 100%);
   --fill-steel-hover: linear-gradient(180deg, color-mix(in srgb, var(--color-accent) 38%, var(--color-surface-active)) 0%, color-mix(in srgb, var(--color-accent) 15%, var(--color-surface-raised)) 100%);

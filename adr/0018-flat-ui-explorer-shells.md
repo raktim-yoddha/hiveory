@@ -150,6 +150,8 @@ the ochre outline of a pane that needs you looked cheap. The rest of the UI stay
   `--fill-*` and `--shadow-*` tokens stay flat, so nothing else changes.
 - **Their main action is brushed steel** (`--fill-steel`, `--color-on-steel`, `--shadow-steel`): the
   theme's silver worked into its surface color with light text, never a white slab.
+  The worktree bar's other buttons (Run, Open in) are built the same way, in dark steel
+  (`--fill-key-dark`, `--shadow-key-rim`): no outline, a dark rim, a lit top edge, the same divider.
 - **Chosen is silver** in them: a chosen answer, Match case or Regular expression is a lit key in the
   theme's accent (`--fill-key-chosen`, `--ring-key-chosen`), never the waiting color. Terminal search
   matches (ADR 0072) are silver too.
