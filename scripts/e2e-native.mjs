@@ -4,7 +4,7 @@
 // scripts. Notifications are captured in the main process, never shown. No model is called.
 // Usage: pnpm build && node scripts/e2e-native.mjs [screenshotDir]
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { join } from 'node:path'
 import { agentMcp, app, close, expect, finish, invoke, launch, page, relaunch, sandbox, shot, test, value, waitFor } from './e2e-harness.mjs'
@@ -235,6 +235,50 @@ await test('an agent lists and runs the Workspace scripts over its Hiveory tools
     const pane = (await value('agents.list', { workspaceId: primary.id })).filter((a) => a.petName === 'lint').at(-1)
     return Boolean(pane) && (await value('terminal.snapshot', { instanceId: pane.id })).data.includes('lint-ok')
   }, 'the agent-started script printed', 20_000)
+})
+
+await test('a new worktree runs its setup scripts and gets the .worktreeinclude files (ADR 0061 amendment)', async () => {
+  writeFileSync(join(repo, '.gitignore'), '.env\n')
+  git('add', '.gitignore')
+  git('commit', '-q', '-m', 'ignore .env')
+  writeFileSync(join(repo, '.env'), 'TOKEN=e2e\n')
+  writeFileSync(join(repo, '.worktreeinclude'), '.env\n')
+  await value('projects.update', {
+    projectId: project.id,
+    settings: { scripts: [{ name: 'say-hi', command: 'echo hiveory-script-ok' }, { name: 'setup', command: 'echo hiveory-setup-ok', onCreate: true }] }
+  })
+  const made = await value('workspaces.create', { projectId: project.id, kind: 'isolated', name: 'set-up', cliSelections: [], autoApprove: false })
+  expect(readFileSync(join(made.path, '.env'), 'utf8') === 'TOKEN=e2e\n', '.env was not copied into the new worktree')
+  let setup
+  await waitFor(async () => {
+    setup = (await value('agents.list', { workspaceId: made.id })).find((a) => a.petName === 'setup')
+    return Boolean(setup)
+  }, 'a terminal named after the setup script')
+  await waitFor(async () => (await value('terminal.snapshot', { instanceId: setup.id })).data.includes('hiveory-setup-ok'), 'the setup script ran', 20_000)
+  const others = (await value('agents.list', { workspaceId: made.id })).map((a) => a.petName)
+  expect(!others.includes('say-hi'), `a script not marked for new worktrees ran: ${others}`)
+})
+
+await test('Find in the terminal searches its scrollback (ADR 0072)', async () => {
+  const shell = (await value('clis.list')).find((c) => c.kind === 'shell' && c.available)
+  const { agent } = await value('agents.open', { workspaceId: primary.id, cliId: shell.id })
+  await waitFor(async () => (await value('terminal.snapshot', { instanceId: agent.id })).data.trim().length > 0, 'the shell prompt')
+  await invoke('terminal.write', { instanceId: agent.id, data: 'echo find-me-one; echo find-me-two\r' })
+  await waitFor(async () => (await value('terminal.snapshot', { instanceId: agent.id })).data.split('find-me-two').length > 2, 'the output')
+  const pane = page.locator(`[data-pane-id="${agent.id}"]`)
+  await pane.locator('.xterm').click()
+  const bar = page.getByRole('search', { name: 'Find in the terminal' })
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+KeyF' : 'Control+Shift+KeyF')
+  await bar.waitFor()
+  await bar.getByRole('textbox', { name: 'Find in the terminal' }).fill('find-me')
+  // The typed command line holds both words too: four matches in all.
+  await waitFor(async () => /\d+ of [4-9]/.test(await bar.textContent()), `a count: ${await bar.textContent()}`)
+  await shot('n6-find-in-terminal')
+  await page.keyboard.press('Enter')
+  await bar.getByRole('textbox').fill('nothing-like-this')
+  await waitFor(async () => (await bar.textContent()).includes('No results'), 'no results')
+  await page.keyboard.press('Escape')
+  await bar.waitFor({ state: 'detached' })
 })
 
 await test('with the window in the tray, an agent opens, reads and captures a page', async () => {

@@ -100,7 +100,7 @@ the bottom. The side panel toggle (in a worktree) sits at the top right, left of
 
 General (Find, Settings, shortcuts, sidebar, side panel, maximize side panel, Schedules), Lists (New worktree,
 Next / Previous worktree), Panes and tabs (New tab, New terminal, Close, Next / Previous tab, Next /
-Previous area, Maximize, Split right / down), Chat (Type in the message box): each row shows its keys
+Previous area, Maximize, Split right / down, Find in the terminal), Chat (Type in the message box): each row shows its keys
 as a keycap with Change (press the new keys; Escape cancels), Remove and Reset; a clash or a reserved key
 is named under it. Built in: the fixed keys, read-only. "Reset every shortcut" when any was changed.
 The chrome buttons' tooltips show the keys ("Hide sidebar (Ctrl Shift B)").

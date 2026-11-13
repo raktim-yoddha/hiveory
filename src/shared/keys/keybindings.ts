@@ -32,6 +32,8 @@ export const APP_COMMANDS = [
   { id: 'maximize-pane', label: 'Maximize or restore the pane', group: 'Panes and tabs', mac: 'Meta+Shift+Enter', other: 'Control+Shift+Enter' },
   { id: 'split-right', label: 'Split the tab out to the right', group: 'Panes and tabs', mac: 'Meta+KeyD', other: 'Alt+Shift+Equal' },
   { id: 'split-down', label: 'Split the tab out below', group: 'Panes and tabs', mac: 'Meta+Shift+KeyD', other: 'Alt+Shift+Minus' },
+  // Ctrl+F stays the shell's own key (forward a character) outside macOS (ADR 0072).
+  { id: 'find-in-terminal', label: 'Find in the terminal', group: 'Panes and tabs', mac: 'Meta+KeyF', other: 'Control+Shift+KeyF' },
   { id: 'focus-message', label: 'Type in the message box', group: 'Chat', mac: 'Meta+KeyL', other: 'Control+Shift+KeyL' }
 ] as const satisfies ReadonlyArray<{ id: string; label: string; group: string; mac: string; other: string }>
 

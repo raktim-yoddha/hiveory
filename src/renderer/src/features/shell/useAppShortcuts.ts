@@ -8,6 +8,8 @@ import { runWorkCommand, trackPaneFocus } from '../panes/work-commands'
 import { useNewWorktree } from '../workspace-create/new-worktree'
 import { usePalette } from './palette/palette-store'
 import { focusArea, trackAreaFocus } from './focus-areas'
+import { activeTerminalId } from '../terminal/terminal-registry'
+import { requestTerminalFind } from '../terminal/terminal-search'
 
 /** A command's keys as the platform writes them ("Ctrl Shift B", "⌘B"), for menus and tooltips; undefined when it has none. */
 export function useCommandKeys(id: AppCommandId): string | undefined {
@@ -65,6 +67,10 @@ export function runAppCommand(id: AppCommandId): boolean {
     const box = inPane ?? boxes[0]
     if (!box) return false
     box.focus()
+  } else if (id === 'find-in-terminal') {
+    // Only where a terminal is in use; elsewhere the keys go on (⌘F finds in an editor pane).
+    const terminal = activeTerminalId()
+    return Boolean(terminal) && requestTerminalFind(terminal!)
   } else return runWorkCommand(id)
   return true
 }

@@ -1,9 +1,10 @@
-import { useId, type InputHTMLAttributes, type ReactNode, type TextareaHTMLAttributes } from 'react'
+import { useId, type InputHTMLAttributes, type ReactNode, type Ref, type TextareaHTMLAttributes } from 'react'
 import styles from './form.module.css'
 
 type InputProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'onChange' | 'value'> & {
   value: string
   onChange: (value: string) => void
+  ref?: Ref<HTMLInputElement>
 }
 
 /** Bare text input with the shared field styling. Needs an aria-label or external label. */

@@ -455,6 +455,9 @@ Initial version does not include:
   (`.env`, local settings; the file Codex and Claude Code read too), never overwriting a file.
 - The window reopens where it was, at its size. Files dropped on a terminal type their quoted paths.
   Ctrl+F6 / Ctrl+Shift+F6 move between the sidebar, the worktree and the side panel.
+- Find in the terminal (⌘F on macOS, Ctrl+Shift+F elsewhere; ADR 0072): a bar over the terminal searches its
+  scrollback as you type, with match case, regular expressions, a count, Enter / Shift+Enter between
+  matches, every match highlighted and marked on the scrollbar.
 - Ctrl+click (⌘+click) in a terminal: a web address opens in a browser pane beside it; a file of the
   worktree (`src/app.ts:12:5`, `(12,5)`, `#L12`) opens in an editor pane at that line. A plain click
   stays a click; a path outside the worktree is refused.

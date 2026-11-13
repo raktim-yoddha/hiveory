@@ -1,4 +1,5 @@
 import { FitAddon } from '@xterm/addon-fit'
+import { SearchAddon } from '@xterm/addon-search'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { WebglAddon } from '@xterm/addon-webgl'
 import { Terminal, type ITheme } from '@xterm/xterm'
@@ -86,6 +87,8 @@ export { terminalMinWidth } from './terminal-fit'
 interface Entry {
   term: Terminal
   fit: FitAddon
+  /** Find in the scrollback (ADR 0072). */
+  search: SearchAddon
   /** Its GPU renderer, while it has one (released with `releaseWebgl`). */
   webgl?: WebglAddon
   /** Reads the whole screen again, after output that never arrived (ADR 0070). */
@@ -287,6 +290,8 @@ const create = (instanceId: string, needs: LayoutNeeds): Entry => {
   })
   const fit = new FitAddon()
   term.loadAddon(fit)
+  const search = new SearchAddon()
+  term.loadAddon(search)
   // Unicode 11 widths match what modern CLIs assume, so columns line up.
   term.loadAddon(new Unicode11Addon())
   term.unicode.activeVersion = '11'
@@ -334,8 +339,9 @@ const create = (instanceId: string, needs: LayoutNeeds): Entry => {
   })
   // While this window keeps the terminal (shown, or kept 90 s off screen) it answers the program's questions (ADR 0070).
   void api('terminal.view', { instanceId, shown: true }).catch(() => undefined)
-  const entry: Entry = { term, fit, element, opened: false, written: -1, pending: [], lastSize: '', needs, visibleRows: 0, cursorHidden: false, placed: '', filter: createDarkBackgroundFilter(() => !font.italic), visible: false, inPage: false, concealed: false }
+  const entry: Entry = { term, fit, search, element, opened: false, written: -1, pending: [], lastSize: '', needs, visibleRows: 0, cursorHidden: false, placed: '', filter: createDarkBackgroundFilter(() => !font.italic), visible: false, inPage: false, concealed: false }
   entries.set(instanceId, entry)
+  ensureFocusTracking(instanceId, element)
   provideLinks(instanceId, term, element)
   // In the page and laid out (another worktree's terminals are detached); background tabs: setTerminalConcealed.
   entry.watch = new IntersectionObserver(([seen]) => {
@@ -548,11 +554,33 @@ export const attachTerminal = (instanceId: string, host: HTMLElement, needs: Lay
 
 export const focusTerminal = (instanceId: string): void => entries.get(instanceId)?.term.focus()
 
+/** The terminal typed in last, so Find from the palette (which takes the focus) still knows it. */
+let lastFocused: string | undefined
+const ensureFocusTracking = (instanceId: string, element: HTMLElement): void => element.addEventListener('focusin', () => (lastFocused = instanceId))
+
+/**
+ * The terminal Find applies to (ADR 0072): the one holding the focus; with nothing focused (a dialog
+ * just closed) or the focus in its own find bar, the last one typed in while it is still on screen.
+ */
+export const activeTerminalId = (): string | undefined => {
+  const focused = document.activeElement
+  for (const [id, entry] of entries) if (entry.element.contains(focused)) return id
+  const free = !focused || focused === document.body || Boolean(focused.closest('[data-terminal-find]'))
+  return free && lastFocused && entries.get(lastFocused)?.visible ? lastFocused : undefined
+}
+
+/** A terminal's search addon and its text, for its find bar. */
+export const terminalSearch = (instanceId: string): { search: SearchAddon; term: Terminal } | undefined => {
+  const entry = entries.get(instanceId)
+  return entry && { search: entry.search, term: entry.term }
+}
+
 /** Frees the terminal when its agent is closed. */
 export const disposeTerminal = (instanceId: string): void => {
   const entry = entries.get(instanceId)
   if (!entry) return
   entries.delete(instanceId)
+  if (lastFocused === instanceId) lastFocused = undefined
   clearTimeout(entry.idle)
   entry.watch?.disconnect()
   releaseWebgl(entry)
