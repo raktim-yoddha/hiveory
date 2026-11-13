@@ -93,9 +93,9 @@ the bottom. The side panel toggle (in a worktree) sits at the top right, left of
   CLIs with ★ starred models first · search, models with Ctrl+1–9, Show more · Reasoning levels · footer Standard |
   Fast, Plan mode, Read-only | Ask first | Full access (Ask first for CLIs that ask, ADR 0073); the trigger shows CLI, model, effort and access) · context meter · usage
   limits (gauge and popover, ADR 0055) · send. Above everything, while the reply waits on you (ADR 0073): one card,
-"N more waiting": Allow <tool>? (its command or file, "Everything it would send", Deny · Allow) · The agent
-has a question (each question's options as keys, "Or answer in your own words", Answer) · Carry out this
-plan? (the plan, "What should change?", Keep planning · Approve plan). A reply that changed files ends with "N files changed
+"1 of N": <tool> needs your permission (its command or file, "Full input", Deny · Allow) · the
+question (its options as rows with a check on the chosen one, "Something else", Answer) · Plan (the plan,
+"What should change?", Keep planning · Approve). A reply that changed files ends with "N files changed
   +a −d · View · Undo"; selected reply text offers Quote. While answering, the box stays open, a queue button sits beside Stop, and
   waiting messages list above the box ("Next" / "Then", each with ×) (ADR 0031).
 

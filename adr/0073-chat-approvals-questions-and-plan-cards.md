@@ -19,11 +19,13 @@ of the feature-gap research (`docs/research-feature-gaps-2026-11.md`).
   server offers that tool to chat agents only and holds the call open until the user answers
   (`ChatService.requestPrompt`, `approvals.ts`). Read-only answers tool requests itself (refused);
   Full access never reaches it; Ask first shows a card.
-- **Cards** above the message box, one at a time, oldest first ("N more waiting"):
-  - a tool: what it would do (its command or file) and everything it would send; Deny or Allow;
-  - the agent's questions: its options as keys (several when it allows that) or the user's own words;
-    Answer — asked in every access level;
-  - a plan (plan mode): the plan in Markdown; Keep planning (with what to change) or Approve plan,
+- **Cards** above the message box, one at a time, oldest first ("1 of 3"), in the composer's own look
+  (its surface, flat; answers as rows like the model picker's; no decorative icons or tags):
+  - a tool: "<tool> needs your permission", what it would do (its command or file) and its full input;
+    Deny or Allow;
+  - the agent's questions: the question, its options as rows (several when it allows that) or the
+    user's own words ("Something else"); Answer — asked in every access level;
+  - a plan (plan mode): the plan in Markdown; Keep planning (with what to change) or Approve,
     which leaves plan mode for this turn (at the chat's own access) and for the next message.
 - While a card waits, the agent is **Needs you** (permission, answer or plan approval) on the board,
   the sidebar and the phone, and the phone answers the same cards (`chat.answer`, a new channel on both

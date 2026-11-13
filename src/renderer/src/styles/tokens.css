@@ -100,14 +100,11 @@
   --shadow-button: none;
 
   /*
-   * Key-cap depth, only for the controls added on 2026-11-13: the worktree bar's buttons, a chat's
-   * approval and question cards and the terminal find bar (ADR 0018 amendment). The rest of the UI
-   * stays flat. A key keeps its own color at the top and falls into shadow toward the bottom over a
+   * Key-cap depth, only for the controls added on 2026-11-13: the worktree bar's buttons and the
+   * terminal find bar (ADR 0018 amendment). The rest of the UI stays flat. A key keeps its own color at the top and falls into shadow toward the bottom over a
    * soft shadow, with no edge lines; pressed, it sinks. Their main action is the plain white accent.
    */
   --key-shade: rgb(0 0 0 / 0.7);
-  --fill-key: linear-gradient(180deg, var(--color-surface-raised) 0%, color-mix(in srgb, var(--color-surface-raised), #000 52%) 100%);
-  --fill-key-hover: linear-gradient(180deg, var(--color-surface-hover) 0%, color-mix(in srgb, var(--color-surface-hover), #000 46%) 100%);
   --fill-key-chosen: linear-gradient(180deg, color-mix(in srgb, var(--color-accent) 12%, var(--color-surface-active)) 0%, color-mix(in srgb, color-mix(in srgb, var(--color-accent) 12%, var(--color-surface-active)), #000 45%) 100%);
   /* The worktree bar's buttons: a dark steel. */
   --fill-key-dark: linear-gradient(180deg, color-mix(in srgb, var(--color-accent) 12%, var(--color-surface-active)) 0%, color-mix(in srgb, var(--color-accent) 4%, var(--color-surface-raised)) 100%);

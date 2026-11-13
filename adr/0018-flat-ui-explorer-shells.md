@@ -138,19 +138,20 @@ removed), not the OpenAI logo.
 ## Amendment (2026-11-13): key-cap depth for the new controls
 
 Decided by the product owner, 2026-11-13: the controls added that day (the worktree bar's Run, Open in
-and git buttons; a chat's approval and question cards; the terminal find bar) read as flat
+and git buttons; the terminal find bar) read as flat
 "cardboard", chosen options must not be yellow, and the ochre outline of a pane that needs you looked
 cheap. The rest of the UI stays exactly as it was.
 
-- **Only those controls get depth**, from their own tokens (`--fill-key`, `--fill-key-hover`,
-  `--fill-key-dark`, `--shadow-key`, `--shadow-key-pressed`, `--shadow-well`): a key keeps its own
+- **Only those controls get depth**, from their own tokens (`--fill-key-dark`, `--shadow-key`, `--shadow-key-pressed`, `--shadow-well`): a key keeps its own
   color at the top and falls into shadow toward the bottom over a soft shadow; pressed, it sinks; their
   fields are wells. No edge lines, rims or sheen: the product owner rejected those. The shared
   `--fill-*` and `--shadow-*` tokens stay flat, so nothing else changes.
-- **Their main action stays the plain white accent** (the git step, Allow, Answer, Approve plan), over
-  the same soft shadow; the worktree bar's other buttons are a dark steel (`--fill-key-dark`).
-- **Chosen is silver** in them: a chosen answer, Match case or Regular expression is a lit key in the
-  theme's accent (`--fill-key-chosen`, a check on answers), never the waiting color. Terminal search
+- **The git step stays the plain white accent**, over the same soft shadow; the worktree bar's other
+  buttons are a dark steel (`--fill-key-dark`).
+- **A chat's approval and question cards** (ADR 0073) take no depth: they are the composer's own
+  surface, flat, with answers as rows like the model picker's and no decorative icons or tags.
+- **Chosen is silver**: Match case or Regular expression switched on is a lit key in the theme's accent
+  (`--fill-key-chosen`), and a chosen answer a tinted row with a check, never the waiting color. Terminal search
   matches (ADR 0072) are silver too.
 - **A pane that needs you** shows a soft silver rim instead of an ochre outline; its status dot keeps
   the status color (ADR 0049 unchanged).

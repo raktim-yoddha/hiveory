@@ -26,7 +26,7 @@ function PromptBody({ chatId, prompt, more }: { chatId: string; prompt: ChatProm
   const answer = useAction('chat.answer')
   const send = (reply: ChatPromptAnswer): void => answer.mutate({ chatId, promptId: prompt.id, answer: reply })
   const busy = answer.isPending
-  const title = prompt.kind === 'permission' ? `Allow ${prompt.tool}?` : prompt.kind === 'plan' ? 'Carry out this plan?' : 'The agent has a question'
+  const title = prompt.kind === 'permission' ? `${prompt.tool} needs your permission` : prompt.kind === 'plan' ? 'Plan' : (prompt.questions[0]?.question ?? 'Question')
 
   return (
     <View style={[styles.card, { backgroundColor: colors.surfaceRaised, borderColor: colors.borderStrong }]} accessibilityLabel="The agent is waiting for you">
@@ -36,7 +36,7 @@ function PromptBody({ chatId, prompt, more }: { chatId: string; prompt: ChatProm
         </Text>
         {more > 0 ? (
           <Text variant="caption" tone="secondary">
-            {more} more waiting
+            1 of {more + 1}
           </Text>
         ) : null}
       </View>
@@ -49,7 +49,7 @@ function PromptBody({ chatId, prompt, more }: { chatId: string; prompt: ChatProm
           ) : null}
           <View style={styles.actions}>
             <Button label="Deny" size="sm" disabled={busy} onPress={() => send({ kind: 'permission', allow: false })} />
-            <Button label="Allow" size="sm" variant="primary" icon={Check} loading={busy} onPress={() => send({ kind: 'permission', allow: true })} />
+            <Button label="Allow" size="sm" variant="primary" loading={busy} onPress={() => send({ kind: 'permission', allow: true })} />
           </View>
         </>
       ) : null}
@@ -66,10 +66,10 @@ function PlanAnswer({ plan, busy, send }: { plan: string; busy: boolean; send: (
       <ScrollView style={styles.plan} nestedScrollEnabled>
         <Markdown text={plan || 'The agent finished planning.'} />
       </ScrollView>
-      <TextField placeholder="What should change? (to keep planning)" value={feedback} onChangeText={setFeedback} />
+      <TextField placeholder="What should change?" value={feedback} onChangeText={setFeedback} />
       <View style={styles.actions}>
         <Button label="Keep planning" size="sm" disabled={busy} onPress={() => send({ kind: 'plan', approve: false, ...(feedback.trim() ? { feedback: feedback.trim() } : {}) })} />
-        <Button label="Approve plan" size="sm" variant="primary" icon={Check} loading={busy} onPress={() => send({ kind: 'plan', approve: true })} />
+        <Button label="Approve" size="sm" variant="primary" loading={busy} onPress={() => send({ kind: 'plan', approve: true })} />
       </View>
     </>
   )
@@ -86,9 +86,9 @@ function QuestionsAnswer({ questions, busy, send }: { questions: ChatQuestion[];
     })
   return (
     <>
-      {questions.map((q) => (
+      {questions.map((q, i) => (
         <View key={q.question} style={styles.question}>
-          <Text variant="body">{q.question}</Text>
+          {i > 0 ? <Text variant="body">{q.question}</Text> : null}
           <View style={styles.options}>
             {q.options.map((o) => {
               const on = (picked[q.question] ?? []).includes(o.label)
@@ -106,7 +106,7 @@ function QuestionsAnswer({ questions, busy, send }: { questions: ChatQuestion[];
             })}
           </View>
           <TextField
-            placeholder={q.options.length ? 'Or answer in your own words' : 'Your answer'}
+            placeholder={q.options.length ? 'Something else' : 'Your answer'}
             value={own[q.question] ?? ''}
             onChangeText={(value) => setOwn((current) => ({ ...current, [q.question]: value }))}
           />
@@ -117,7 +117,6 @@ function QuestionsAnswer({ questions, busy, send }: { questions: ChatQuestion[];
           label="Answer"
           size="sm"
           variant="primary"
-          icon={Check}
           loading={busy}
           disabled={!ready}
           onPress={() => send({ kind: 'question', answers: Object.fromEntries(questions.map((q) => [q.question, answerOf(picked[q.question] ?? [], own[q.question] ?? '')])) })}
