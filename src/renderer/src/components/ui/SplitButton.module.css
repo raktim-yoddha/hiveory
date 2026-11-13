@@ -93,32 +93,32 @@
 /* The worktree's next git step stands out: the metal button. */
 .primary {
   border-color: transparent;
-  background: var(--gradient-metal);
-  box-shadow: var(--shadow-button);
+  background: var(--fill-steel);
+  box-shadow: var(--shadow-steel);
 }
 
 .primary .main,
 .primary .more {
-  color: var(--color-accent-contrast);
+  color: var(--color-on-steel);
 }
 
 .primary .more {
-  border-left-color: color-mix(in srgb, var(--color-accent-contrast) 22%, transparent);
-  box-shadow: inset var(--hairline) 0 0 rgb(255 255 255 / 0.35);
+  border-left-color: rgb(0 0 0 / 0.45);
+  box-shadow: inset var(--hairline) 0 0 rgb(255 255 255 / 0.12);
 }
 
 .primary .chevron {
-  color: var(--color-accent-contrast);
+  color: var(--color-on-steel);
 }
 
 .primary .main:not(:disabled):hover,
 .primary .more:hover {
-  background: var(--gradient-metal-hover);
+  background: var(--fill-steel-hover);
 }
 
 .primary .main:not(:disabled):active,
 .primary .more:active,
 .primary .more[aria-expanded='true'] {
-  background: var(--color-accent);
+  background: var(--color-surface-active);
   box-shadow: var(--shadow-pressed);
 }

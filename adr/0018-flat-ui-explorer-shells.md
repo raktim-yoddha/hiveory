@@ -157,3 +157,6 @@ you looked cheap, and chosen options must be silver, not yellow.
   their hue. Supersedes "every theme is flat: no gradients, sheen or textures" above and ADR 0044's
   "Dark is perfectly flat" wording; selection as a tinted fill (ADR 0044) still holds.
 - Terminal search matches (ADR 0072) are silver too.
+- **Primary buttons are brushed steel** (Commit, Allow, Answer): the theme's silver worked into its
+  surface color with light text (`--fill-steel`, `--color-on-steel`, `--shadow-steel`), never a white
+  slab. The bright metal (`--gradient-metal`) stays for small parts: switches, slider thumbs, progress.

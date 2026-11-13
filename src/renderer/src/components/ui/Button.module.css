@@ -50,13 +50,13 @@
 }
 
 .primary {
-  background: var(--gradient-metal);
-  color: var(--color-accent-contrast);
-  box-shadow: var(--shadow-button);
+  background: var(--fill-steel);
+  color: var(--color-on-steel);
+  box-shadow: var(--shadow-steel);
 }
 
 .primary:not(:disabled):hover {
-  background: var(--gradient-metal-hover);
+  background: var(--fill-steel-hover);
 }
 
 .primary:not(:disabled):active {

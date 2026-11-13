@@ -80,36 +80,46 @@
    * with a faint catch-light on the top edge, a dark bevel on the bottom edge and a contact shadow
    * under it. Pressed controls sink. Every value derives from the theme's own colors.
    */
-  --color-sheen: rgb(255 255 255 / 0.045);
-  --color-sheen-strong: rgb(255 255 255 / 0.07);
-  --color-shade: rgb(0 0 0 / 0.6);
+  --color-sheen: rgb(255 255 255 / 0.05);
+  --color-sheen-strong: rgb(255 255 255 / 0.09);
+  --color-shade: rgb(0 0 0 / 0.7);
   --gradient-metal: linear-gradient(180deg, var(--color-accent) 0%, color-mix(in srgb, var(--color-accent), #000 22%) 100%);
   --gradient-metal-hover: linear-gradient(180deg, var(--color-accent-hover) 0%, color-mix(in srgb, var(--color-accent-hover), #000 18%) 100%);
   --gradient-surface: none;
   --gradient-bronze-line: linear-gradient(var(--color-bronze), var(--color-bronze));
   --gradient-app: none;
-  --fill-raised: linear-gradient(180deg, var(--color-surface-raised) 0%, color-mix(in srgb, var(--color-surface-raised), #000 35%) 100%);
-  --fill-raised-hover: linear-gradient(180deg, var(--color-surface-hover) 0%, color-mix(in srgb, var(--color-surface-hover), #000 30%) 100%);
+  --fill-raised: linear-gradient(180deg, var(--color-surface-raised) 0%, color-mix(in srgb, var(--color-surface-raised), #000 52%) 100%);
+  --fill-raised-hover: linear-gradient(180deg, var(--color-surface-hover) 0%, color-mix(in srgb, var(--color-surface-hover), #000 46%) 100%);
   --fill-icon: var(--color-surface-active);
   --fill-active: var(--color-surface-active);
-  --fill-selected: linear-gradient(180deg, var(--color-surface-active) 0%, color-mix(in srgb, var(--color-surface-active), #000 35%) 100%);
+  --fill-selected: linear-gradient(180deg, var(--color-surface-active) 0%, color-mix(in srgb, var(--color-surface-active), #000 50%) 100%);
   --fill-accent-soft: var(--color-bronze-soft);
   /* A chosen option or card: the raised fill with a breath of the theme's silver, brighter than its neighbours (ADR 0044). */
-  --fill-chosen: linear-gradient(180deg, color-mix(in srgb, var(--color-accent) 9%, var(--color-surface-active)) 0%, color-mix(in srgb, color-mix(in srgb, var(--color-accent) 9%, var(--color-surface-active)), #000 32%) 100%);
+  --fill-chosen: linear-gradient(180deg, color-mix(in srgb, var(--color-accent) 9%, var(--color-surface-active)) 0%, color-mix(in srgb, color-mix(in srgb, var(--color-accent) 9%, var(--color-surface-active)), #000 48%) 100%);
   --fill-glass-accent: var(--color-glass);
   --fill-hero: var(--color-surface-raised);
   /* A pane, sidebar or card: only a faint catch-light on its top edge. */
   --shadow-surface: inset 0 var(--hairline) 0 var(--color-sheen);
   /* A raised control (secondary button, chip, key cap): top catch-light, bottom bevel, contact shadow. */
   --shadow-raised:
-    inset 0 var(--hairline) 0 var(--color-sheen-strong), inset 0 calc(-1 * var(--hairline)) 0 rgb(0 0 0 / 0.35),
-    0 var(--hairline) 0 rgb(0 0 0 / 0.7), 0 2px 4px -1px var(--color-shade);
-  /* The metal (primary) button: the same shape on the accent. */
+    inset 0 var(--hairline) 0 var(--color-sheen-strong), inset 0 calc(-1 * var(--hairline)) 0 rgb(0 0 0 / 0.45),
+    0 var(--hairline) 0 rgb(0 0 0 / 0.8), 0 3px 6px -2px var(--color-shade);
+  /* A small metal part (switch, slider thumb): the same shape on the accent. */
   --shadow-button:
     inset 0 var(--hairline) 0 rgb(255 255 255 / 0.3), inset 0 calc(-1 * var(--hairline)) 0 rgb(0 0 0 / 0.25),
-    0 var(--hairline) 0 rgb(0 0 0 / 0.7), 0 2px 4px -1px var(--color-shade);
+    0 var(--hairline) 0 rgb(0 0 0 / 0.8), 0 3px 6px -2px var(--color-shade);
+  /*
+   * The primary button (Commit, Allow, Answer): brushed steel, the theme's silver worked into its
+   * surface color, with light text — it leads by its brighter edge, not by being white.
+   */
+  --fill-steel: linear-gradient(180deg, color-mix(in srgb, var(--color-accent) 30%, var(--color-surface-active)) 0%, color-mix(in srgb, var(--color-accent) 11%, var(--color-surface-raised)) 100%);
+  --fill-steel-hover: linear-gradient(180deg, color-mix(in srgb, var(--color-accent) 38%, var(--color-surface-active)) 0%, color-mix(in srgb, var(--color-accent) 15%, var(--color-surface-raised)) 100%);
+  --color-on-steel: var(--color-text);
+  --shadow-steel:
+    inset 0 var(--hairline) 0 rgb(255 255 255 / 0.22), inset 0 calc(-1 * var(--hairline)) 0 rgb(0 0 0 / 0.45),
+    0 0 0 var(--hairline) rgb(0 0 0 / 0.55), 0 3px 6px -2px var(--color-shade);
   /* Pressed: the control sinks. */
-  --shadow-pressed: inset 0 var(--hairline) 3px rgb(0 0 0 / 0.65), 0 var(--hairline) 0 var(--color-sheen);
+  --shadow-pressed: inset 0 var(--hairline) 4px rgb(0 0 0 / 0.75), 0 var(--hairline) 0 var(--color-sheen);
   /* A field: a well cut into the surface. */
   --shadow-inset: inset 0 var(--hairline) 3px rgb(0 0 0 / 0.55), 0 var(--hairline) 0 var(--color-sheen);
   /* The rim of a chosen option, in the accent. */

@@ -95,7 +95,8 @@ tokens, derived from each theme's own colors (ADR 0011, 0012, 0013, 0017).
 Surfaces are solid; controls are tactile (ADR 0018 amendment 2026-11-13). A raised control (button,
 chip, key cap, chosen tab, option) is lit from above: a faint catch-light on its top edge, its own color falling
 into shadow toward the bottom (never lightened toward white), a dark bottom bevel and a short contact shadow (`--fill-raised`, `--shadow-raised`;
-the metal primary button `--gradient-metal`, `--shadow-button`). Pressed, it sinks
+a primary button is brushed steel with light text, `--fill-steel`, `--shadow-steel`, never a white slab;
+the bright `--gradient-metal` is for small parts such as switches and slider thumbs). Pressed, it sinks
 (`--shadow-pressed`); a field is a well (`--shadow-inset`); a pane or card keeps only the
 catch-light (`--shadow-surface`). Never a component's own literal shadow or gradient. Containers
 have no resting outline; a border appears only on hover, focus or selection, and a
