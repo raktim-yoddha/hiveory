@@ -75,29 +75,42 @@
 
 
   /*
-   * Flat by design (ADR 0018): every theme is solid color — no gradients,
-   * sheen or textures. The gradient-named tokens stay as single-color fills so
-   * components need no special cases.
+   * Tactile depth (ADR 0018 amendment 2026-11-13). Surfaces stay solid; controls are lit from
+   * above like a machined part: a hairline catch-light on the top edge, a fill that darkens a
+   * few percent toward the bottom, and a short contact shadow. Pressed controls sink (an inner
+   * shadow). Every value derives from the theme's own colors, so all themes keep their hue.
    */
-  --color-sheen: transparent;
-  --color-sheen-strong: transparent;
-  --gradient-metal: linear-gradient(var(--color-accent), var(--color-accent));
-  --gradient-metal-hover: linear-gradient(var(--color-accent-hover), var(--color-accent-hover));
+  --color-sheen: rgb(255 255 255 / 0.06);
+  --color-sheen-strong: rgb(255 255 255 / 0.11);
+  --color-shade: rgb(0 0 0 / 0.55);
+  --gradient-metal: linear-gradient(180deg, var(--color-accent-hover) 0%, var(--color-accent) 58%, color-mix(in srgb, var(--color-accent), #000 16%) 100%);
+  --gradient-metal-hover: linear-gradient(180deg, color-mix(in srgb, var(--color-accent-hover), #fff 45%) 0%, var(--color-accent-hover) 58%, var(--color-accent) 100%);
   --gradient-surface: none;
   --gradient-bronze-line: linear-gradient(var(--color-bronze), var(--color-bronze));
   --gradient-app: none;
-  --fill-raised: var(--color-surface-raised);
+  --fill-raised: linear-gradient(180deg, color-mix(in srgb, var(--color-surface-raised), #fff 7%) 0%, var(--color-surface-raised) 100%);
+  --fill-raised-hover: linear-gradient(180deg, color-mix(in srgb, var(--color-surface-hover), #fff 10%) 0%, var(--color-surface-hover) 100%);
   --fill-icon: var(--color-surface-active);
   --fill-active: var(--color-surface-active);
-  --fill-selected: var(--color-surface-active);
+  --fill-selected: linear-gradient(180deg, color-mix(in srgb, var(--color-surface-active), #fff 6%) 0%, var(--color-surface-active) 100%);
   --fill-accent-soft: var(--color-bronze-soft);
-  /* A chosen card (theme, pane style): brighter than every card around it, in every theme (ADR 0044). */
-  --fill-chosen: color-mix(in srgb, var(--color-accent) 12%, var(--color-surface-active));
+  /* A chosen option or card: lit in the theme's silver accent, brighter than everything around it (ADR 0044). */
+  --fill-chosen: linear-gradient(180deg, color-mix(in srgb, var(--color-accent) 22%, var(--color-surface-active)) 0%, color-mix(in srgb, var(--color-accent) 12%, var(--color-surface-active)) 100%);
   --fill-glass-accent: var(--color-glass);
   --fill-hero: var(--color-surface-raised);
-  --shadow-surface: none;
-  --shadow-raised: none;
-  --shadow-button: none;
+  /* A pane, sidebar or card: only the catch-light on its top edge. */
+  --shadow-surface: inset 0 var(--hairline) 0 var(--color-sheen);
+  /* A raised control (secondary button, chip, key cap). */
+  --shadow-raised: inset 0 var(--hairline) 0 var(--color-sheen-strong), 0 var(--hairline) 2px var(--color-shade);
+  /* The metal (primary) button: a bright top bevel and a darker bottom one. */
+  --shadow-button:
+    inset 0 var(--hairline) 0 rgb(255 255 255 / 0.55), inset 0 calc(-1 * var(--hairline)) 0 rgb(0 0 0 / 0.18), 0 var(--hairline) 2px var(--color-shade);
+  /* Pressed: the control sinks. */
+  --shadow-pressed: inset 0 var(--hairline) 2px var(--color-shade);
+  /* A field: a well cut into the surface. */
+  --shadow-inset: inset 0 var(--hairline) 2px rgb(0 0 0 / 0.45), 0 var(--hairline) 0 var(--color-sheen);
+  /* The rim of a chosen option, in the accent. */
+  --ring-chosen: inset 0 0 0 var(--hairline) color-mix(in srgb, var(--color-accent) 45%, transparent);
 
   /* Status: warm, muted and matte — sage for working, ochre for needs you, no glow (ADR 0049). */
   --color-idle: #7a7064;
@@ -331,8 +344,8 @@
 }
 
 /*
- * Dark theme: pure black and neutral silver-grey. Perfectly flat — no hue, no
- * gradients, no sheen — so every surface of a kind is exactly one color.
+ * Dark theme: pure black and neutral silver-grey, no hue. Controls keep the shared tactile
+ * depth (ADR 0018 amendment 2026-11-13); surfaces of a kind are one color.
  */
 :root[data-theme='dark'] {
   --color-bg: #000000;

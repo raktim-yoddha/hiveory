@@ -25,6 +25,8 @@
   border: var(--border-width) solid transparent;
   border-radius: var(--radius-sm);
   background: var(--color-surface-inset);
+  /* A well cut into the surface (ADR 0018 amendment 2026-11-13). */
+  box-shadow: var(--shadow-inset);
   color: var(--color-text);
   font-size: var(--text-md);
   user-select: text;

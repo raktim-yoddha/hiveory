@@ -12,11 +12,11 @@ describe('find in a terminal (ADR 0072)', () => {
     expect(hex6('var(--x)')).toBeUndefined()
   })
 
-  it('tints matches from the background toward yellow, the current one more', () => {
+  it('tints matches from the background toward the theme silver, the current one more', () => {
     expect(mixHex('#000000', '#ffffff', 0.5)).toBe('#808080')
-    const tokens: Record<string, string> = { bg: '#101010', yellow: '#e8b04f', 'bright-yellow': '#f3cd85' }
+    const tokens: Record<string, string> = { bg: '#101010', white: '#d0d0d0', 'bright-white': '#f5f5f5' }
     const d = searchDecorations((name) => tokens[name] ?? '')
-    expect(d).toMatchObject({ matchOverviewRuler: '#e8b04f', activeMatchColorOverviewRuler: '#f3cd85' })
+    expect(d).toMatchObject({ activeMatchColorOverviewRuler: '#f5f5f5' })
     expect(d.matchBackground).toMatch(/^#[0-9a-f]{6}$/)
     expect(d.activeMatchBackground).not.toBe(d.matchBackground)
     // An unreadable theme (a VS Code theme without these colors) still gives valid colors.

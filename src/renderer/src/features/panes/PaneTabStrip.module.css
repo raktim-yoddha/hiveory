@@ -39,6 +39,7 @@
 .selected,
 .selected:hover {
   background: var(--fill-selected);
+  box-shadow: var(--shadow-raised);
   color: var(--color-text);
 }
 
@@ -109,6 +110,17 @@
   display: flex;
   flex: none;
   align-items: center;
+}
+
+/* "+" is a key cap: raised at rest, so it never reads as a stray glyph. */
+.add button {
+  background: var(--fill-raised);
+  box-shadow: var(--shadow-raised);
+  color: var(--color-text-secondary);
+}
+
+.add button svg {
+  stroke-width: 2.25;
 }
 
 /* A terminal that printed while out of sight: a ring (a file's unsaved dot is solid). */

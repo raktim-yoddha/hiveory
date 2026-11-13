@@ -41,17 +41,18 @@ export function mixHex(a: string, b: string, amount: number): string {
 }
 
 /**
- * Match colors from the terminal theme: matches are the background tinted toward its yellow so their
- * text stays readable, the current match more strongly; the scrollbar marks them in yellow.
+ * Match colors from the terminal theme, in its silver (ADR 0018 amendment 2026-11-13): matches are the
+ * background tinted toward its white so their text stays readable, the current match more strongly;
+ * the scrollbar marks them in the same silver.
  */
 export function searchDecorations(token: (name: string) => string): Decorations {
   const background = hex6(token('bg')) ?? '#000000'
-  const yellow = hex6(token('yellow')) ?? '#e8b04f'
-  const bright = hex6(token('bright-yellow')) ?? yellow
+  const silver = hex6(token('white')) ?? '#d0d0d0'
+  const bright = hex6(token('bright-white')) ?? silver
   return {
-    matchBackground: mixHex(background, yellow, 0.3),
-    activeMatchBackground: mixHex(background, bright, 0.6),
-    matchOverviewRuler: yellow,
+    matchBackground: mixHex(background, silver, 0.22),
+    activeMatchBackground: mixHex(background, bright, 0.45),
+    matchOverviewRuler: mixHex(background, silver, 0.6),
     activeMatchColorOverviewRuler: bright
   }
 }

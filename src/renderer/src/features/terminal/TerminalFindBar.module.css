@@ -11,10 +11,12 @@
   gap: var(--space-1);
   /* Narrow panes keep every control: the count and buttons wrap under the field. */
   width: min(340px, calc(100% - var(--space-9)));
-  padding: var(--space-1) var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-width) solid var(--color-border-strong);
   border-radius: var(--radius-md);
+  /* A floating plate: lit on its top edge, over a soft shadow. */
   background: var(--color-glass);
-  box-shadow: var(--shadow-popover);
+  box-shadow: var(--shadow-raised), var(--shadow-popover);
 }
 
 .input {
@@ -31,7 +33,7 @@
 
 .count {
   flex: none;
-  padding: 0 var(--space-2);
+  padding: 0 var(--space-3);
   color: var(--color-text-secondary);
   font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;

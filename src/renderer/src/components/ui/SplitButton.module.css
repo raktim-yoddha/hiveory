@@ -7,7 +7,8 @@
   overflow: hidden;
   border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-sm);
-  background: var(--color-surface-raised);
+  background: var(--fill-raised);
+  box-shadow: var(--shadow-raised);
   -webkit-app-region: no-drag;
 }
 
@@ -22,7 +23,9 @@
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
   white-space: nowrap;
-  transition: background var(--duration-fast) var(--ease-out);
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out);
 }
 
 .main {
@@ -35,7 +38,9 @@
 
 .more {
   padding: 0 var(--space-3);
-  border-left: var(--border-width) solid var(--color-border);
+  /* A cut between the halves: a dark groove with the catch-light beside it. */
+  border-left: var(--border-width) solid var(--color-shade);
+  box-shadow: inset var(--hairline) 0 0 var(--color-sheen);
 }
 
 /* The chevron alone opens the menu: the whole control is one button. */
@@ -45,10 +50,17 @@
   border-left: 0;
 }
 
+/* Hover lights the half under the pointer; pressing (or its open menu) sinks it. */
 .main:not(:disabled):hover,
-.more:hover,
+.more:hover {
+  background: var(--fill-raised-hover);
+}
+
+.main:not(:disabled):active,
+.more:active,
 .more[aria-expanded='true'] {
-  background: var(--color-surface-hover);
+  background: var(--color-surface-active);
+  box-shadow: var(--shadow-pressed);
 }
 
 .main:disabled {
@@ -78,10 +90,11 @@
   text-overflow: ellipsis;
 }
 
-/* The worktree's next git step stands out. */
+/* The worktree's next git step stands out: the metal button. */
 .primary {
   border-color: transparent;
-  background: var(--color-accent);
+  background: var(--gradient-metal);
+  box-shadow: var(--shadow-button);
 }
 
 .primary .main,
@@ -90,7 +103,8 @@
 }
 
 .primary .more {
-  border-left-color: color-mix(in srgb, var(--color-accent-contrast) 20%, transparent);
+  border-left-color: color-mix(in srgb, var(--color-accent-contrast) 22%, transparent);
+  box-shadow: inset var(--hairline) 0 0 rgb(255 255 255 / 0.35);
 }
 
 .primary .chevron {
@@ -98,7 +112,13 @@
 }
 
 .primary .main:not(:disabled):hover,
-.primary .more:hover,
+.primary .more:hover {
+  background: var(--gradient-metal-hover);
+}
+
+.primary .main:not(:disabled):active,
+.primary .more:active,
 .primary .more[aria-expanded='true'] {
-  background: var(--color-accent-hover);
+  background: var(--color-accent);
+  box-shadow: var(--shadow-pressed);
 }
