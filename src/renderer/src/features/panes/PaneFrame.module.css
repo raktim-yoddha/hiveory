@@ -12,7 +12,6 @@
   border: var(--border-width) solid var(--pane-rest-border);
   border-radius: var(--surface-radius);
   background: var(--color-surface);
-  box-shadow: var(--shadow-surface);
   transition:
     border-color var(--duration-base) var(--ease-out),
     box-shadow var(--duration-base) var(--ease-out);
@@ -23,15 +22,9 @@
   border-color: var(--color-border-strong);
 }
 
-/*
- * A pane whose agent needs you: a lit silver rim and a soft halo, so it reads at a glance without
- * a colored outline (its status dot keeps the status color).
- */
+/* A pane whose agent needs you: a soft silver rim, not an ochre outline; its status dot keeps the color (ADR 0018 amendment 2026-11-13). */
 .frame[data-tone='waiting'] {
   border-color: color-mix(in srgb, var(--color-accent) 26%, transparent);
-  box-shadow:
-    var(--shadow-surface),
-    0 0 0 calc(var(--hairline) * 3) color-mix(in srgb, var(--color-accent) 4%, transparent);
 }
 
 .highlighted {

@@ -50,18 +50,17 @@
 }
 
 .primary {
-  background: var(--fill-steel);
-  color: var(--color-on-steel);
-  box-shadow: var(--shadow-steel);
+  background: var(--gradient-metal);
+  color: var(--color-accent-contrast);
+  box-shadow: var(--shadow-button);
 }
 
 .primary:not(:disabled):hover {
-  background: var(--fill-steel-hover);
+  background: var(--gradient-metal-hover);
 }
 
 .primary:not(:disabled):active {
   transform: translateY(var(--hairline));
-  box-shadow: var(--shadow-pressed);
 }
 
 .secondary {
@@ -72,13 +71,8 @@
 }
 
 .secondary:not(:disabled):hover {
-  background: var(--fill-raised-hover);
+  background: var(--color-surface-hover);
   border-color: var(--color-border-strong);
-}
-
-.secondary:not(:disabled):active {
-  background: var(--color-surface-active);
-  box-shadow: var(--shadow-pressed);
 }
 
 .ghost {
@@ -119,31 +113,16 @@
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--color-text-secondary);
+  color: var(--color-text-muted);
   transition:
     background var(--duration-fast) var(--ease-out),
-    box-shadow var(--duration-fast) var(--ease-out),
     color var(--duration-fast) var(--ease-out);
 }
 
-/* Quiet at rest; under the pointer it rises as a key cap, and sinks when pressed. */
-.iconButton:not(:disabled):hover {
-  background: var(--fill-raised-hover);
-  box-shadow: var(--shadow-raised);
+.iconButton:not(:disabled):hover,
+.active {
+  background: var(--color-surface-hover);
   color: var(--color-text);
-}
-
-.iconButton:not(:disabled):active {
-  background: var(--color-surface-active);
-  box-shadow: var(--shadow-pressed);
-}
-
-/* Switched on (a toggle such as Match case): lit in the silver accent. */
-.active,
-.active:not(:disabled):hover {
-  background: var(--fill-chosen);
-  box-shadow: var(--ring-chosen), var(--shadow-raised);
-  color: var(--color-accent-hover);
 }
 
 .iconButton:disabled {

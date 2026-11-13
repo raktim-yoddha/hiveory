@@ -86,26 +86,23 @@ Conceptually:
 ```
 
 Implemented palettes (`src/renderer/src/styles/tokens.css`): **Dark** (default) —
-pure black and neutral grey, no hue; **Bronze** —
+pure black and neutral grey, perfectly flat, no gradients or sheen; **Bronze** —
 warm graphite with champagne-silver text and metallic accents; **Silver** — cool
 graphite with brushed-silver accents (ADR 0044: three built-in themes; VS Code themes cover
 the rest). Saturated color only for status. Component fills are `--fill-*`
-tokens, derived from each theme's own colors (ADR 0011, 0012, 0013, 0017).
+tokens so a theme can flatten them (ADR 0011, 0012, 0013, 0017).
 
-Surfaces are solid; controls are tactile (ADR 0018 amendment 2026-11-13). A raised control (button,
-chip, key cap, chosen tab, option) is lit from above: a faint catch-light on its top edge, its own color falling
-into shadow toward the bottom (never lightened toward white), a dark bottom bevel and a short contact shadow (`--fill-raised`, `--shadow-raised`;
-a primary button is brushed steel with light text, `--fill-steel`, `--shadow-steel`, never a white slab;
-the bright `--gradient-metal` is for small parts such as switches and slider thumbs). Pressed, it sinks
-(`--shadow-pressed`); a field is a well (`--shadow-inset`); a pane or card keeps only the
-catch-light (`--shadow-surface`). Never a component's own literal shadow or gradient. Containers
+Every theme is flat: solid colors only — no gradients, sheen or textures. Containers
 have no resting outline; a border appears only on hover, focus or selection, and a
 pane's header shares its body's surface (no dividing line) (ADR 0018).
+One exception: the worktree bar's buttons, a chat's approval and question cards and the terminal
+find bar are key caps with depth (`--fill-key`, `--shadow-key`; their main action brushed steel,
+`--fill-steel`; chosen is silver, never the waiting color) (ADR 0018 amendment 2026-11-13). A pane that
+needs you shows a soft silver rim, not an ochre outline.
 
 Selection is a tinted fill, never an outline: selected chips, option cards and "on"
 badges use `--fill-accent-soft` with `--color-accent` text or check, which reads in every
-theme; a chosen option or an "on" toggle is lit silver (`--fill-chosen` with its rim `--ring-chosen`),
-never the waiting color; a pane that needs you shows a lit silver rim, its dot carries the status; a chosen card among cards (a theme) uses the brighter `--fill-chosen`, and its
+theme; a chosen card among cards (a theme) uses the brighter `--fill-chosen`, and its
 hover is a fill too (ADR 0044). A border is reserved for keyboard focus and the active pane (ADR 0018).
 
 Themes set opaque `--base-*` surfaces; components use `--color-surface*`, which

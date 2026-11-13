@@ -53,10 +53,10 @@ function PermissionBody({ prompt, busy, more, send }: BodyProps<'permission'>) {
         <pre>{prompt.input}</pre>
       </details>
       <div className={styles.actions}>
-        <Button size="sm" disabled={busy} onClick={() => void send({ kind: 'permission', allow: false })}>
+        <Button size="sm" className={styles.key} disabled={busy} onClick={() => void send({ kind: 'permission', allow: false })}>
           Deny
         </Button>
-        <Button size="sm" variant="primary" icon={<Check />} loading={busy} onClick={() => void send({ kind: 'permission', allow: true })}>
+        <Button size="sm" variant="primary" className={styles.steel} icon={<Check />} loading={busy} onClick={() => void send({ kind: 'permission', allow: true })}>
           Allow
         </Button>
       </div>
@@ -116,7 +116,7 @@ function QuestionBody({ prompt, busy, more, send }: BodyProps<'question'>) {
         </fieldset>
       ))}
       <div className={styles.actions}>
-        <Button size="sm" variant="primary" icon={<Check />} loading={busy} disabled={!ready} onClick={submit}>
+        <Button size="sm" variant="primary" className={styles.steel} icon={<Check />} loading={busy} disabled={!ready} onClick={submit}>
           Answer
         </Button>
       </div>
@@ -136,10 +136,10 @@ function PlanBody({ prompt, busy, more, send }: BodyProps<'plan'>) {
       <div className={styles.plan}>{prompt.plan ? <Markdown text={prompt.plan} /> : <p>The agent finished planning.</p>}</div>
       <TextInput className={styles.own} aria-label="What to change in the plan" placeholder="What should change? (to keep planning)" value={feedback} onChange={setFeedback} />
       <div className={styles.actions}>
-        <Button size="sm" disabled={busy} onClick={() => void send({ kind: 'plan', approve: false, ...(feedback.trim() ? { feedback: feedback.trim() } : {}) })}>
+        <Button size="sm" className={styles.key} disabled={busy} onClick={() => void send({ kind: 'plan', approve: false, ...(feedback.trim() ? { feedback: feedback.trim() } : {}) })}>
           Keep planning
         </Button>
-        <Button size="sm" variant="primary" icon={<Check />} loading={busy} onClick={() => void send({ kind: 'plan', approve: true })}>
+        <Button size="sm" variant="primary" className={styles.steel} icon={<Check />} loading={busy} onClick={() => void send({ kind: 'plan', approve: true })}>
           Approve plan
         </Button>
       </div>

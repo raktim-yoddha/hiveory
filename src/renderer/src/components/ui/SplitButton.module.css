@@ -7,8 +7,8 @@
   overflow: hidden;
   border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-sm);
-  background: var(--fill-raised);
-  box-shadow: var(--shadow-raised);
+  background: var(--fill-key);
+  box-shadow: var(--shadow-key);
   -webkit-app-region: no-drag;
 }
 
@@ -39,8 +39,8 @@
 .more {
   padding: 0 var(--space-3);
   /* A cut between the halves: a dark groove with the catch-light beside it. */
-  border-left: var(--border-width) solid var(--color-shade);
-  box-shadow: inset var(--hairline) 0 0 var(--color-sheen);
+  border-left: var(--border-width) solid var(--key-shade);
+  box-shadow: inset var(--hairline) 0 0 rgb(255 255 255 / 0.05);
 }
 
 /* The chevron alone opens the menu: the whole control is one button. */
@@ -53,14 +53,14 @@
 /* Hover lights the half under the pointer; pressing (or its open menu) sinks it. */
 .main:not(:disabled):hover,
 .more:hover {
-  background: var(--fill-raised-hover);
+  background: var(--fill-key-hover);
 }
 
 .main:not(:disabled):active,
 .more:active,
 .more[aria-expanded='true'] {
   background: var(--color-surface-active);
-  box-shadow: var(--shadow-pressed);
+  box-shadow: var(--shadow-key-pressed);
 }
 
 .main:disabled {
@@ -120,5 +120,5 @@
 .primary .more:active,
 .primary .more[aria-expanded='true'] {
   background: var(--color-surface-active);
-  box-shadow: var(--shadow-pressed);
+  box-shadow: var(--shadow-key-pressed);
 }

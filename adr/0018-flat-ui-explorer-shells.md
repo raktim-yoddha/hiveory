@@ -135,28 +135,23 @@ removed), not the OpenAI logo.
 - Editor panes count as panes but not as agents. A workspace with only open
   files is not "empty", and presets still require no agents.
 
-## Amendment (2026-11-13): tactile controls
+## Amendment (2026-11-13): key-cap depth for the new controls
 
-Decided by the product owner, 2026-11-13: the new controls (approval cards, the find bar, the worktree
-bar's buttons, the tab strip's "+") read as flat "cardboard", the yellow outline of a pane that needs
-you looked cheap, and chosen options must be silver, not yellow.
+Decided by the product owner, 2026-11-13: the controls added that day (the worktree bar's Run, Open in
+and git buttons; a chat's approval and question cards; the terminal find bar) read as flat
+"cardboard", their white primary button looked out of place, chosen options must not be yellow, and
+the ochre outline of a pane that needs you looked cheap. The rest of the UI stays exactly as it was.
 
-- **Surfaces stay solid; controls get depth**, everywhere, from the shared tokens (no component special
-  cases): a hairline catch-light on the top edge (`--color-sheen`, `--color-sheen-strong`), a fill that keeps
-  the control's own color at the top and falls into shadow toward the bottom, never lightened toward
-  white (`--fill-raised`, `--fill-raised-hover`, `--fill-selected`,
-  `--gradient-metal`), a short contact shadow (`--shadow-raised`, `--shadow-button`), a pressed state
-  that sinks (`--shadow-pressed`) and fields as wells (`--shadow-inset`). Panes and cards keep only the
-  catch-light (`--shadow-surface`). This is the common recipe for tactile dark UIs: an inner top
-  highlight, a vertical gradient, a dark bottom bevel and drop shadow, inner shadow when pressed.
-- **Chosen is silver**: a chosen option, an "on" toggle (Match case) and a chosen card are lit in the
-  theme's accent (`--fill-chosen` and its rim `--ring-chosen`), never the waiting color.
-- **A pane that needs you** shows a lit silver rim with a soft ring instead of an ochre outline; its
-  status dot keeps the status color (ADR 0049 is unchanged: no glow on status).
-- Every value derives from the theme's own colors, so Dark, Bronze, Silver and VS Code themes keep
-  their hue. Supersedes "every theme is flat: no gradients, sheen or textures" above and ADR 0044's
-  "Dark is perfectly flat" wording; selection as a tinted fill (ADR 0044) still holds.
-- Terminal search matches (ADR 0072) are silver too.
-- **Primary buttons are brushed steel** (Commit, Allow, Answer): the theme's silver worked into its
-  surface color with light text (`--fill-steel`, `--color-on-steel`, `--shadow-steel`), never a white
-  slab. The bright metal (`--gradient-metal`) stays for small parts: switches, slider thumbs, progress.
+- **Only those controls get depth**, from their own tokens (`--fill-key`, `--fill-key-hover`,
+  `--shadow-key`, `--shadow-key-pressed`, `--shadow-well`): a key keeps its own color at the top and
+  falls into shadow toward the bottom, with a faint top edge, a dark bottom bevel and a contact shadow;
+  pressed, it sinks; their fields are wells. The common recipe for tactile dark UIs (an inner top
+  highlight, a vertical gradient, a dark drop shadow, an inner shadow when pressed). The shared
+  `--fill-*` and `--shadow-*` tokens stay flat, so nothing else changes.
+- **Their main action is brushed steel** (`--fill-steel`, `--color-on-steel`, `--shadow-steel`): the
+  theme's silver worked into its surface color with light text, never a white slab.
+- **Chosen is silver** in them: a chosen answer, Match case or Regular expression is a lit key in the
+  theme's accent (`--fill-key-chosen`, `--ring-key-chosen`), never the waiting color. Terminal search
+  matches (ADR 0072) are silver too.
+- **A pane that needs you** shows a soft silver rim instead of an ochre outline; its status dot keeps
+  the status color (ADR 0049 unchanged).
