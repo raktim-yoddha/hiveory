@@ -493,7 +493,7 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
   'browser.clearCookies': async ({ profileId }) => ({ count: await c.browser.clearCookies(profileId) }),
 
   'chat.clis': () => c.chats.clis(),
-  'chat.get': ({ chatId }) => ({ ...c.chats.get(chatId), running: c.chats.isRunning(chatId) }),
+  'chat.get': ({ chatId }) => ({ ...c.chats.get(chatId), running: c.chats.isRunning(chatId), prompts: c.chats.prompts(chatId) }),
   'chat.update': ({ chatId, ...patch }) => {
     const chat = c.chats.update(chatId, patch)
     // A chat-view agent's CLI follows its chat's (ADR 0058): the pane, board and tools show the new one.
@@ -510,6 +510,7 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
   'chat.attach': ({ chatId, name, mime, data }) => c.chats.attach(chatId, name, mime, data),
   'chat.attachPath': ({ chatId, path }) => c.chats.attachPath(chatId, path),
   'chat.stop': ({ chatId }) => c.chats.stop(chatId),
+  'chat.answer': ({ chatId, promptId, answer }) => c.chats.answer(chatId, promptId, answer),
   'chat.catalog': ({ cliId, refresh }) => c.chats.catalog(cliId, refresh ?? false),
   'chat.limits': ({ cliId, refresh }) => c.chats.limits(cliId, refresh ?? false),
   'chat.revertTurn': ({ chatId, messageId }) => c.chats.revertTurn(chatId, messageId),

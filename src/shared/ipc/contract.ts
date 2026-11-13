@@ -24,7 +24,7 @@ import type {
 } from '../domain'
 import type { AgentPeek, AgentUpdate } from '../domain/agent-update'
 import type { HiveoryLink } from '../domain/links'
-import type { ChatAttachment, ChatCatalog, ChatMessage, ChatSession, ChatSummary, UsageLimits } from '../domain/chat'
+import type { ChatAttachment, ChatCatalog, ChatMessage, ChatPrompt, ChatSession, ChatSummary, UsageLimits } from '../domain/chat'
 import type { ChatAppend } from '../domain/chat-delta'
 import type { ChangeSet, CommitSummary } from '../domain/changes'
 import type { UsageReport } from '../domain/usage'
@@ -520,6 +520,8 @@ export const requestSchemas = {
     model: z.string().max(200).regex(/^[\w.:/@[\]-]*$/).optional(),
     effort: z.string().max(40).regex(/^[\w-]*$/).optional(),
     autoApprove: z.boolean().optional(),
+    /** Ask before each tool instead of refusing it (ADR 0073). */
+    ask: z.boolean().optional(),
     title: z.string().max(200).optional(),
     /** Plan and fast mode (ADR 0058). */
     plan: z.boolean().optional(),
@@ -545,6 +547,16 @@ export const requestSchemas = {
   /** Registers a file the user dropped or pasted from disk (by path; nothing is copied). */
   'chat.attachPath': z.object({ chatId: id, path: z.string().min(1).max(1000) }),
   'chat.stop': z.object({ chatId: id }),
+  /** The user's answer to a card the running turn waits on: allow, the questions' answers, the plan (ADR 0073). */
+  'chat.answer': z.object({
+    chatId: id,
+    promptId: id,
+    answer: z.discriminatedUnion('kind', [
+      z.object({ kind: z.literal('permission'), allow: z.boolean() }),
+      z.object({ kind: z.literal('question'), answers: z.record(z.string().max(2000), z.string().max(4000)).refine((a) => Object.keys(a).length <= 20, 'Too many answers.') }),
+      z.object({ kind: z.literal('plan'), approve: z.boolean(), feedback: z.string().max(4000).optional() })
+    ])
+  }),
   /** Sends, or lines the message up while the chat is answering (ADR 0031). */
   'chat.queue': z.object({ chatId: id, text: z.string().trim().min(1).max(MAX_SAVED_PROMPT_TEXT) }),
   'chat.unqueue': z.object({ chatId: id, index: z.number().int().min(0).max(MAX_QUEUED) }),
@@ -811,13 +823,14 @@ export interface ResponseMap {
   'browser.exportCookies': { count: number; path: string } | null
   'browser.clearCookies': { count: number }
   'chat.clis': string[]
-  'chat.get': ChatSession & { running: boolean }
+  'chat.get': ChatSession & { running: boolean; prompts: ChatPrompt[] }
   'chat.update': ChatSession
   'chat.setModel': ChatSession
   'chat.send': void
   'chat.attach': ChatAttachment
   'chat.attachPath': ChatAttachment
   'chat.stop': void
+  'chat.answer': void
   'chat.queue': void
   'chat.unqueue': void
   'prompts.list': SavedPrompt[]

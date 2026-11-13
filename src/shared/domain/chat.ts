@@ -32,6 +32,8 @@ export interface ChatCatalog {
   commands?: ChatCommand[]
   /** It has a read-only planning mode the composer can switch on (ADR 0058). */
   plan?: boolean
+  /** It asks the user before using a tool, and asks its questions as cards (ADR 0073). */
+  prompts?: boolean
 }
 
 /** One window of a CLI plan's usage limit (ADR 0055): "5-hour limit", "Weekly · Opus". */
@@ -125,6 +127,8 @@ export interface ChatSession {
   model?: string
   effort?: string
   autoApprove: boolean
+  /** With `autoApprove` off: ask the user before each tool that changes something, instead of refusing it (ADR 0073). */
+  ask?: boolean
   /** Plan mode: the CLI plans and answers without changing anything (ADR 0058). */
   plan?: boolean
   /** Fast mode, for models that have one (ADR 0058). */
@@ -157,7 +161,36 @@ export interface ChatSummary {
   agentId?: string
   /** Messages waiting for the current turn to end (ADR 0031). */
   queued?: string[]
+  /** What the running turn waits on the user for, oldest first (ADR 0073). */
+  prompts?: ChatPrompt[]
 }
+
+/** A chat's access (ADR 0064, 0073): refuse what changes things, ask first, or let it all run. */
+export type ChatAccess = 'read' | 'ask' | 'full'
+
+export const chatAccess = (chat: Pick<ChatSession, 'autoApprove' | 'ask'>): ChatAccess => (chat.autoApprove ? 'full' : chat.ask ? 'ask' : 'read')
+
+/** One of the agent's questions, with the answers it offers (Claude's AskUserQuestion). */
+export interface ChatQuestion {
+  question: string
+  header?: string
+  multiSelect?: boolean
+  options: Array<{ label: string; description?: string }>
+}
+
+/** Something a running turn waits on the user for (ADR 0073). */
+export type ChatPrompt =
+  /** A tool to allow or deny; `detail` is what it would do (a command, a file), `input` its arguments. */
+  | { id: string; kind: 'permission'; tool: string; detail: string; input: string }
+  | { id: string; kind: 'question'; questions: ChatQuestion[] }
+  /** Leave plan mode and carry the plan out. */
+  | { id: string; kind: 'plan'; plan: string }
+
+/** The user's answer to a prompt. Questions: the question's text → the chosen labels or own words. */
+export type ChatPromptAnswer =
+  | { kind: 'permission'; allow: boolean }
+  | { kind: 'question'; answers: Record<string, string> }
+  | { kind: 'plan'; approve: boolean; feedback?: string }
 
 /** CLIs that can drive a chat (headless mode with parseable output). Antigravity is excluded on purpose. */
 export const CHAT_CLI_IDS = ['claude', 'codex', 'opencode', 'kilocode', 'gemini', 'qwen', 'grok', 'kimi', 'cursor', 'copilot'] as const

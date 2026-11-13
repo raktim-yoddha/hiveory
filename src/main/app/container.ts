@@ -13,7 +13,8 @@ import { PromptLibrary } from '../services/chat/prompt-library'
 import { AppService } from '../services/connections/app-service'
 import { SecretBox } from '../services/connections/secret-box'
 import { AgentTools } from '../services/agent-tools/agent-tools'
-import { handleBody } from '../services/agent-tools/mcp-protocol'
+import { handleBody, type ToolHost } from '../services/agent-tools/mcp-protocol'
+import { withApprovalTool } from '../services/chat/approvals'
 import { AgentService } from '../services/agents/agent-service'
 import { BrowserService } from '../services/browser/browser-service'
 import { BrowserTools } from '../services/browser/browser-tools'
@@ -380,19 +381,24 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     const refuse = (message: string) => ({ jsonrpc: '2.0', id: null, error: { code: -32001, message } })
     if (!settings) return refuse('Hiveory is starting.')
     const agent = agents.find(instanceId)
-    if (agent && settings.get().agentTools) return handleBody(body, new AgentTools(toolDeps, instanceId))
-    // Any agent while coordination tools are off: browser, computer and apps only.
     if (!agent) return refuse('This agent is no longer registered in Hiveory.')
+    // A chat's CLI asks its permission requests, questions and plans through this server (ADR 0073).
+    const withPrompts = (host: ToolHost): ToolHost => (agent.chatUi ? withApprovalTool(host, (args) => chats.requestPrompt(instanceId, args)) : host)
+    if (settings.get().agentTools) return handleBody(body, withPrompts(new AgentTools(toolDeps, instanceId)))
+    // Any agent while coordination tools are off: browser, computer and apps only.
     const caller = { id: agent.id, workspaceId: agent.workspaceId, petName: agent.petName }
     const browserFamily = { handles: (n: string) => n.startsWith('browser_'), definitions: () => browserTools.definitions(), call: browserTools.call.bind(browserTools) }
     const families = [...(settings.get().browserUse ? [browserFamily] : []), ...extraTools()]
-    return handleBody(body, {
-      list: () => families.flatMap((f) => f.definitions()),
-      call: (name, args) => {
-        const family = families.find((f) => f.handles(name))
-        return family ? family.call(caller, name, args) : Promise.resolve({ text: `Unknown tool: ${name}`, isError: true })
-      }
-    })
+    return handleBody(
+      body,
+      withPrompts({
+        list: () => families.flatMap((f) => f.definitions()),
+        call: (name, args) => {
+          const family = families.find((f) => f.handles(name))
+          return family ? family.call(caller, name, args) : Promise.resolve({ text: `Unknown tool: ${name}`, isError: true })
+        }
+      })
+    )
   }
   hookServer.setMcpHandler(handleMcp)
   // The terminal host's relay hands its agents' hooks and tool calls to the same handlers (ADR 0050 §6).

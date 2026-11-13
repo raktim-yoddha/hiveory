@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { type CliInstance, type CliInstanceView, type CliRuntimeDetails, type CliSelection, type LayoutNode, type Side, type Workspace, type WorkspaceScript } from '@shared/domain'
-import { CHAT_CLI_IDS } from '@shared/domain/chat'
+import { CHAT_CLI_IDS, type ChatPrompt } from '@shared/domain/chat'
 import { AppException, fail } from '@shared/errors'
 import { buildGridLayout, dockPane, insertBeside, listPanes, stackPane } from '@shared/layout/operations'
 import { generatePetNames } from '@shared/naming/names'
@@ -15,6 +15,13 @@ import type { LayoutService } from '../layout/layout-service'
 import type { StateStore } from '../persistence/state-store'
 import type { WorkspaceRepository } from '../workspaces/workspace-repository'
 import type { KitSource } from '../workspaces/workspace-service'
+
+/** Why a chat agent waits, by the card its reply shows (ADR 0073). */
+const PROMPT_WAIT: Record<ChatPrompt['kind'], Pick<CliRuntimeDetails, 'waitingReason' | 'activity'>> = {
+  permission: { waitingReason: 'permission', activity: 'Needs your permission' },
+  question: { waitingReason: 'input', activity: 'Needs your answer' },
+  plan: { waitingReason: 'confirmation', activity: 'Needs your plan approval' }
+}
 
 /** How long a new terminal may take to print its prompt before a script's command is typed anyway. */
 const SHELL_PROMPT_WAIT_MS = 5000
@@ -91,7 +98,10 @@ export class AgentService {
   /** Runtime state of any agent: its terminal process, or its chat runs in chat view. */
   details(instance: CliInstance): CliRuntimeDetails {
     if (!instance.chatUi) return this.runtime.details(instance.id)
-    // A chat-view agent is always ready for a message; it is "working" while a reply streams.
+    // A chat-view agent is always ready for a message; it is "working" while a reply streams, and
+    // needs you while that reply waits on a card (ADR 0073).
+    const prompt = this.chats.prompts(instance.id)[0]
+    if (prompt) return { status: 'waiting-for-you', running: true, ...PROMPT_WAIT[prompt.kind] }
     return this.chats.isRunning(instance.id) ? { status: 'working', running: true, activity: 'Replying' } : { status: 'idle', running: true }
   }
 

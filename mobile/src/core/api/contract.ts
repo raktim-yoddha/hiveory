@@ -62,6 +62,7 @@ export const PHONE_CHANNELS = [
   'routines.runs',
   'chat.attach',
   'chat.queue',
+  'chat.answer',
   'chat.unqueue',
   'prompts.list',
   'prompts.save',

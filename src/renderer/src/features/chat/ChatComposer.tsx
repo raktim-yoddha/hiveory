@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from 'react'
 import { AppWindow, ArrowUp, ListPlus, Paperclip, Plus, Square, X } from 'lucide-react'
-import type { ChatSession, ChatCommand } from '@shared/domain/chat'
+import type { ChatSession, ChatCommand, ChatPrompt } from '@shared/domain/chat'
 import type { FileEntry } from '@shared/domain'
 import { IconButton } from '../../components/ui/Button'
 import { Menu } from '../../components/ui/Menu'
@@ -12,6 +12,7 @@ import { useNotices } from '../../stores/notices'
 import { AlsoAsk } from './AlsoAsk'
 import { askSeveral } from './ask-several'
 import { AttachmentChips } from './AttachmentChips'
+import { ChatPromptCard } from './ChatPromptCard'
 import { ComposerTracks } from './ComposerTracks'
 import { ContextMeter, latestUsage, WindowPicker } from './ComposerExtras'
 import { LONG_TEXT_CHARS, useAttachments } from './useAttachments'
@@ -29,7 +30,7 @@ export const QUOTE_EVENT = 'hiveory:quote'
 const STASH_KEY = 'hiveory.promptStash'
 
 interface ChatComposerProps {
-  chat: ChatSession & { running: boolean }
+  chat: ChatSession & { running: boolean; prompts?: ChatPrompt[] }
   placeholder?: string
   /** The worktree it works in: `@` files, its changes and the agent's subagents (ADR 0058). */
   workspaceId?: string
@@ -299,6 +300,7 @@ export function ChatComposer({ chat, placeholder, workspaceId, projectId }: Chat
 
   return (
     <div className={cx(styles.composerWrap, styles.composerWrapAgent)} onClick={focusChatInput}>
+      {chat.prompts?.length ? <ChatPromptCard chatId={chat.id} prompts={chat.prompts} /> : null}
       <ComposerTracks chat={chat} workspaceId={workspaceId} projectId={projectId} />
       <div
         className={cx(styles.composer, dragging && styles.composerDrop)}
@@ -395,6 +397,7 @@ export function ChatComposer({ chat, placeholder, workspaceId, projectId }: Chat
               fast={Boolean(chat.fast)}
               plan={Boolean(chat.plan)}
               autoApprove={chat.autoApprove}
+              ask={Boolean(chat.ask)}
               switchable={Boolean(chat.agentId)}
               started={chat.messages.length > 0}
               onChange={(patch) => {

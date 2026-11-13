@@ -1,11 +1,11 @@
 import { create } from 'zustand'
-import type { ChatAttachment, ChatCatalog, ChatMessage, ChatSession, ChatSummary } from '@shared/domain/chat'
+import type { ChatAttachment, ChatCatalog, ChatMessage, ChatPrompt, ChatPromptAnswer, ChatSession, ChatSummary } from '@shared/domain/chat'
 import { applyChatAppends, type ChatAppend } from '@shared/domain/chat-delta'
 import type { RequestOf } from '@shared/ipc/contract'
 import { api } from '../lib/api'
 import { reportError, runAction } from './notices'
 
-type LoadedChat = ChatSession & { running: boolean }
+type LoadedChat = ChatSession & { running: boolean; prompts?: ChatPrompt[] }
 
 interface ChatState {
   /** The chats behind Work agents in chat view, by agent id (ADR 0037). */
@@ -17,6 +17,8 @@ interface ChatState {
   update(chatId: string, patch: Omit<RequestOf<'chat.update'>, 'chatId'>): Promise<void>
   send(chatId: string, text: string, attachments?: ChatAttachment[]): Promise<boolean>
   stop(chatId: string): Promise<void>
+  /** Answers a card the running reply waits on (ADR 0073). */
+  answer(chatId: string, promptId: string, answer: ChatPromptAnswer): Promise<void>
   /** Lines a message up while the chat is answering (ADR 0031), or takes one back out. */
   queue(chatId: string, text: string): Promise<boolean>
   unqueue(chatId: string, index: number): Promise<void>
@@ -95,7 +97,7 @@ export const useChat = create<ChatState>((set, get) => ({
 
   update: async (id, patch) => {
     const chat = await runAction('Update chat', () => api('chat.update', { chatId: id, ...patch }))
-    if (chat) set((s) => ({ chats: { ...s.chats, [id]: { ...chat, running: s.chats[id]?.running ?? false } } }))
+    if (chat) set((s) => ({ chats: { ...s.chats, [id]: { ...chat, running: s.chats[id]?.running ?? false, prompts: s.chats[id]?.prompts } } }))
   },
 
   send: async (id, text, attachments = []) => {
@@ -110,6 +112,10 @@ export const useChat = create<ChatState>((set, get) => ({
 
   stop: async (id) => {
     await runAction('Stop', () => api('chat.stop', { chatId: id }))
+  },
+
+  answer: async (id, promptId, answer) => {
+    await runAction('Answer', () => api('chat.answer', { chatId: id, promptId, answer }))
   },
 
   loadCatalog: async (cliId, refresh = false) => {
@@ -145,6 +151,6 @@ export const useChat = create<ChatState>((set, get) => ({
       if (!chat) return {}
       const index = chat.messages.findIndex((m) => m.id === message.id)
       const messages = index >= 0 ? chat.messages.map((m, i) => (i === index ? message : m)) : [...chat.messages, message]
-      return { chats: { ...s.chats, [chatId]: { ...chat, messages, running: summary.running, title: summary.title, queued: summary.queued } } }
+      return { chats: { ...s.chats, [chatId]: { ...chat, messages, running: summary.running, title: summary.title, queued: summary.queued, prompts: summary.prompts } } }
     })
 }))

@@ -39,6 +39,10 @@ const setup = (workspacePatch: Partial<Workspace> = {}, settings?: ProjectSettin
     isRunning(id: string) {
       return this.running.has(id)
     },
+    waiting: new Map<string, Array<{ id: string; kind: 'permission' | 'question' | 'plan' }>>(),
+    prompts(id: string) {
+      return this.waiting.get(id) ?? []
+    },
     ensureAgentChat: vi.fn(),
     stop: vi.fn(),
     delete: vi.fn()
@@ -101,6 +105,9 @@ describe('agents in chat view', () => {
     expect(agents.list('w1')[0]!.runtime).toMatchObject({ status: 'working', running: true })
     expect(emitted.at(-1)).toEqual(['runtime.changed', expect.objectContaining({ instanceId: agent.id, runtime: expect.objectContaining({ status: 'working' }) })])
     expect(agents.find(agent.id)!.hasConversation).toBe(true)
+    // A reply waiting on a card needs the user (ADR 0073).
+    chats.waiting.set(agent.id, [{ id: 'p1', kind: 'permission' }])
+    expect(agents.list('w1')[0]!.runtime).toEqual({ status: 'waiting-for-you', running: true, waitingReason: 'permission', activity: 'Needs your permission' })
   })
 
   it('opens a CLI in its terminal unless a Chat UI is asked for, which starts on the Workspace defaults (ADR 0059)', () => {

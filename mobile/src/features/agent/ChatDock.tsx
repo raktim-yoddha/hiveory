@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { ScrollView, StyleSheet, View } from 'react-native'
 import { Bookmark, Paperclip, X } from 'lucide-react-native'
 import { useAction, useCall } from '@/core/api'
-import { Composer, ModelBar } from '@/core/chat'
+import { Composer, ModelBar, PromptCard } from '@/core/chat'
 import { radius, space, useTheme } from '@/core/theme'
 import { IconButton, Text } from '@/core/ui'
 import { PromptsSheet } from './PromptsSheet'
@@ -35,6 +35,7 @@ export function ChatDock({ instanceId, petName }: { instanceId: string; petName:
 
   return (
     <>
+      <PromptCard chatId={instanceId} />
       {queued.length || files.files.length ? (
         <ScrollView horizontal contentContainerStyle={styles.chips} keyboardShouldPersistTaps="handled">
           {queued.map((q, index) => (

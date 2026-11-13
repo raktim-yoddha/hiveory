@@ -2,3 +2,4 @@
 export { ChatThread } from './ChatThread'
 export { Composer } from './Composer'
 export { ModelBar } from './ModelBar'
+export { PromptCard } from './PromptCard'

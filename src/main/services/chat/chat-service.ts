@@ -6,7 +6,7 @@ import { mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, dirname, extname, join } from 'node:path'
 import { parentRepository, type ChatChoice, type CliInstance } from '@shared/domain'
-import { CHAT_CLI_IDS, type ChatAttachment, type ChatCatalog, type ChatMessage, type ChatSession, type ChatSummary, type UsageLimits } from '@shared/domain/chat'
+import { CHAT_CLI_IDS, chatAccess, type ChatAttachment, type ChatCatalog, type ChatMessage, type ChatPrompt, type ChatPromptAnswer, type ChatSession, type ChatSummary, type UsageLimits } from '@shared/domain/chat'
 import { chatAppends, chatSent, type ChatSent } from '@shared/domain/chat-delta'
 import { fail } from '@shared/errors'
 import type { Logger } from '../../app/logger'
@@ -19,6 +19,7 @@ import { resolveSpawnTarget } from '../pty/spawn-target'
 import { localChatProcesses, type ChatProcess, type ChatProcessBackend } from './chat-process'
 import type { WorkspaceRepository } from '../workspaces/workspace-repository'
 import { ChatAccumulator } from './accumulator'
+import { answers, automaticDecision, decide, parsePromptRequest, toChatPrompt, type Decision, type PromptRequest } from './approvals'
 import type { ChatStore } from './chat-store'
 import { probeCli } from './cli-probe'
 import { CHAT_PROVIDERS, transcriptPrompt, type CatalogRunner, type ChatMcp } from './providers'
@@ -50,6 +51,13 @@ export const attachmentKind = (name: string): ChatAttachment['kind'] => KIND_BY_
 /** A file name that is safe on every platform. */
 export const safeName = (name: string): string => basename(name).replace(/[^\w.() -]+/g, '_').slice(0, 120) || 'file'
 
+/** A prompt of a running turn and the CLI's tool call waiting on it (ADR 0073). */
+interface Waiting {
+  prompt: ChatPrompt
+  request: PromptRequest
+  resolve: (decision: Decision) => void
+}
+
 interface Run {
   /** Absent while the turn's checkpoint is being written, before the CLI starts. */
   proc?: ChatProcess
@@ -64,6 +72,8 @@ interface Run {
  */
 export class ChatService extends EventEmitter<{ run: [chatId: string, running: boolean] }> {
   private readonly runs = new Map<string, Run>()
+  /** Prompts of running turns, oldest first (ADR 0073). */
+  private readonly waiting = new Map<string, Waiting[]>()
   /** Attachment paths main created or the user picked, per chat; `send` accepts nothing else. */
   private readonly attachments = new Map<string, Set<string>>()
   private readonly catalogs = new Map<string, { at: number; catalog: Promise<ChatCatalog> }>()
@@ -174,7 +184,7 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
     })
   }
 
-  update(chatId: string, patch: Partial<Pick<ChatSession, 'cliId' | 'model' | 'effort' | 'autoApprove' | 'title' | 'plan' | 'fast'>>): ChatSession {
+  update(chatId: string, patch: Partial<Pick<ChatSession, 'cliId' | 'model' | 'effort' | 'autoApprove' | 'ask' | 'title' | 'plan' | 'fast'>>): ChatSession {
     const chat = this.get(chatId)
     const started = chat.messages.length > 0
     if (patch.cliId !== undefined && patch.cliId !== chat.cliId) {
@@ -193,6 +203,7 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
     if ('model' in patch) chat.model = patch.model || undefined
     if ('effort' in patch) chat.effort = patch.effort || undefined
     if (patch.autoApprove !== undefined) chat.autoApprove = patch.autoApprove
+    if (patch.ask !== undefined) chat.ask = patch.ask || undefined
     if (patch.plan !== undefined) chat.plan = patch.plan || undefined
     if (patch.fast !== undefined) chat.fast = patch.fast || undefined
     if (patch.title !== undefined) chat.title = patch.title.trim().slice(0, 80) || chat.title
@@ -225,7 +236,7 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
       .models(this.cliRunner(executable))
       .then((found): ChatCatalog => {
         const { models, commands } = Array.isArray(found) ? { models: found, commands: [] } : found
-        return { cliId, models, ...(commands.length ? { commands } : {}), ...(provider.plan ? { plan: true } : {}), ...(provider.limits ? { limits: true } : {}) }
+        return { cliId, models, ...(commands.length ? { commands } : {}), ...(provider.plan ? { plan: true } : {}), ...(provider.prompts ? { prompts: true } : {}), ...(provider.limits ? { limits: true } : {}) }
       })
       .catch((error: Error) => {
         this.log.warn(`Model discovery failed for ${cliId}`, error)
@@ -517,7 +528,69 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
     this.broadcast('state.changed', { topic: 'chats' })
   }
 
+  /**
+   * A running turn's permission request, question or plan (ADR 0073), from the CLI's permission-prompt
+   * tool. The chat's access answers tool requests it decides alone; the rest wait for the user's card.
+   */
+  requestPrompt(chatId: string, args: Record<string, unknown>): Promise<Decision> {
+    const chat = this.store.get(chatId)
+    const request = parsePromptRequest(args)
+    if (!chat || !this.runs.has(chatId)) return Promise.resolve({ behavior: 'deny', message: 'This chat is not answering right now.' })
+    const automatic = automaticDecision(request, chatAccess(chat))
+    if (automatic) return Promise.resolve(automatic)
+    return new Promise((resolve) => {
+      const list = this.waiting.get(chatId) ?? []
+      list.push({ prompt: toChatPrompt(randomUUID(), request), request, resolve })
+      this.waiting.set(chatId, list)
+      this.promptsChanged(chatId)
+    })
+  }
+
+  /** The user's answer to one of a turn's prompts; the CLI carries on with it. */
+  answer(chatId: string, promptId: string, answer: ChatPromptAnswer): void {
+    const chat = this.get(chatId)
+    const list = this.waiting.get(chatId) ?? []
+    const item = list.find((w) => w.prompt.id === promptId)
+    if (!item) return fail('NOT_FOUND', 'That was already answered, or the reply ended.')
+    if (!answers(item.prompt, answer)) fail('INVALID_INPUT', 'That answer does not fit the question.')
+    this.settle(chatId, item, decide(item.request, answer, chatAccess(chat)))
+    // An approved plan ends plan mode for the chat too, so the next message is not planned again.
+    if (answer.kind === 'plan' && answer.approve && chat.plan) {
+      chat.plan = undefined
+      this.store.save(chat)
+    }
+    this.promptsChanged(chatId)
+  }
+
+  /** What a chat's running turn waits on the user for, oldest first. */
+  prompts(chatId: string): ChatPrompt[] {
+    return (this.waiting.get(chatId) ?? []).map((w) => w.prompt)
+  }
+
+  private settle(chatId: string, item: Waiting, decision: Decision): void {
+    const rest = (this.waiting.get(chatId) ?? []).filter((w) => w !== item)
+    if (rest.length) this.waiting.set(chatId, rest)
+    else this.waiting.delete(chatId)
+    item.resolve(decision)
+  }
+
+  /** A turn that ends (or is stopped) leaves nothing waiting: its open prompts are refused. */
+  private dropPrompts(chatId: string): void {
+    const list = this.waiting.get(chatId)
+    if (!list) return
+    this.waiting.delete(chatId)
+    for (const item of list) item.resolve({ behavior: 'deny', message: 'The user stopped this reply.' })
+    this.promptsChanged(chatId)
+  }
+
+  /** Windows and phones reload the chat; the agent's status follows (Needs you while one waits). */
+  private promptsChanged(chatId: string): void {
+    this.broadcast('state.changed', { topic: 'chats', chatId })
+    this.emit('run', chatId, this.runs.has(chatId))
+  }
+
   stop(chatId: string): void {
+    this.dropPrompts(chatId)
     const run = this.runs.get(chatId)
     if (!run) return
     // Stop means stop: what was waiting is dropped too.
@@ -555,6 +628,7 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
   }
 
   private finish(chat: ChatSession, reply: ChatMessage, acc: ChatAccumulator, error?: string): void {
+    this.dropPrompts(chat.id)
     if (acc.sessionId && !chat.providerSessionId) chat.providerSessionId = acc.sessionId
     // The new CLI has the conversation now; later turns resume its session.
     if (!error) delete chat.handoff
@@ -616,7 +690,8 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
       updatedAt: chat.updatedAt,
       running: this.runs.has(chat.id),
       agentId: chat.agentId,
-      ...(chat.queued?.length ? { queued: [...chat.queued] } : {})
+      ...(chat.queued?.length ? { queued: [...chat.queued] } : {}),
+      ...(this.waiting.has(chat.id) ? { prompts: this.prompts(chat.id) } : {})
     }
   }
 }

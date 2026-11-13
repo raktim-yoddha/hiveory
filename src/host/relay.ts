@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto'
 import type { HostTransport, KeptHook } from '@shared/host/protocol'
 import type { Logger } from '../main/app/logger'
 import { MCP_TOOL_TIMEOUT_MS } from '../main/services/cli/adapters/mcp-injection'
+import { APPROVAL_WAIT_MS } from '../main/services/chat/approvals'
 import { HookServer } from '../main/services/cli/hooks/hook-server'
 
 /** Hooks kept per agent while no app is attached; the newest win. */
@@ -43,11 +44,11 @@ export const createRelay = (out: () => HostTransport | null, keepFile: string, l
         const client = out()
         if (!client) return resolve(notOpen(body, 'Hiveory is not open, so its tools are unavailable. Keep working; they return when it opens.'))
         const requestId = randomBytes(8).toString('hex')
-        // Longer than any tool call may take, so the agent's own timeout always fires first.
+        // Longer than any tool call may take, a chat's approval card included (ADR 0073), so the agent's own timeout always fires first.
         const timer = setTimeout(() => {
           pending.delete(requestId)
           resolve(notOpen(body, 'Hiveory did not answer.'))
-        }, MCP_TOOL_TIMEOUT_MS + 30_000)
+        }, Math.max(MCP_TOOL_TIMEOUT_MS, APPROVAL_WAIT_MS) + 30_000)
         pending.set(requestId, { resolve, timer })
         client.send({ kind: 'event', event: 'relay.mcp', params: { requestId, instanceId, body } })
       })

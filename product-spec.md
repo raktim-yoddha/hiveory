@@ -419,6 +419,11 @@ Initial version does not include:
   branch against its base, one commit, or one chat turn, as a file tree with line counts; a file opens
   its diff in place. It reads Git where the worktree lives (this computer, an SSH host or a Hiveory
   server) and never changes anything.
+- A Claude Chat UI can **Ask first** (beside Read-only and Full access, ADR 0073): a tool that would change
+  something waits on a card above the message box (what it would run or write; Deny or Allow). The
+  agent's questions become a card in every access level (its options, or your own words), and in plan
+  mode its plan does too (Keep planning or Approve plan). While a card waits the agent needs you, on the
+  board and the phone, which answers the same cards.
 - Each chat-view turn in a Git worktree keeps a checkpoint; a reply that changed files shows how many,
   with View (its own diff) and Undo (its files back as before the turn, after a confirmation).
 - A chat-view agent may switch CLI mid-conversation; the new CLI receives the conversation so far.

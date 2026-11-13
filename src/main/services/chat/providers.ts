@@ -5,6 +5,7 @@ import { ALLOW_ALL_PERMISSIONS, claudeMcpArgs, codexMcpArgs, mcpServersJson, ope
 import type { McpEndpoint } from '../cli/adapters/types'
 import { CLAUDE_CONTROL_ARGS, claudeControl, claudeControlReply } from './cli-probe'
 import { claudeParser, codexParser, geminiParser, opencodeParser, plainParser, type LineParser } from './parsers'
+import { APPROVAL_TOOL_FULL, APPROVAL_WAIT_MS } from './approvals'
 
 export interface RunInput {
   prompt: string
@@ -57,6 +58,8 @@ export interface ChatProvider {
   models(run: CatalogRunner): Promise<ChatModel[] | { models: ChatModel[]; commands: ChatCommand[] }>
   /** It has a read-only planning mode (`RunInput.plan`). */
   plan?: boolean
+  /** Its permission requests, questions and plans reach Hiveory's approval tool (ADR 0073). */
+  prompts?: boolean
   /** The plan's usage limits, asked of the CLI itself (ADR 0055); absent when the CLI cannot say. */
   limits?(run: CatalogRunner): Promise<PlanLimits>
   run(input: RunInput): RunSpec
@@ -254,6 +257,7 @@ const claude: ChatProvider = {
   resumable: true,
   // Asked of the CLI itself (no model call); the aliases still work when it cannot answer.
   plan: true,
+  prompts: true,
   models: async (cli) => {
     const reply = await cli
       .ask(CLAUDE_CONTROL_ARGS, [claudeControl('models', { subtype: 'initialize' })], (m) => claudeControlReply(m, 'models'))
@@ -277,11 +281,16 @@ const claude: ChatProvider = {
         ...flag('--effort', effort),
         ...(sessionId ? ['--resume', sessionId] : ['--session-id', assigned as string]),
         ...attachmentDirs(attachments).flatMap((dir) => ['--add-dir', dir]),
-        // Plan mode wins over full access: it is the user's "think, don't touch" for this turn.
-        ...(plan ? ['--permission-mode', 'plan'] : autoApprove ? ['--dangerously-skip-permissions'] : []),
+        // Plan mode wins over full access: it is the user's "think, don't touch" for this turn. An approved
+        // plan then goes on with full access, which needs bypass made available up front (ADR 0073).
+        ...(plan ? ['--permission-mode', 'plan', ...(autoApprove ? ['--allow-dangerously-skip-permissions'] : [])] : autoApprove ? ['--dangerously-skip-permissions'] : []),
         ...(fast && (!model || /opus/i.test(model)) ? ['--settings', JSON.stringify({ fastMode: true })] : []),
-        ...(mcp ? claudeMcpArgs(mcp.endpoint, mcp.configPath, mcp.coordination) : [])
+        ...(mcp ? claudeMcpArgs(mcp.endpoint, mcp.configPath, mcp.coordination) : []),
+        // Permission requests, questions and plans become cards in the chat (ADR 0073).
+        ...(mcp ? ['--permission-prompt-tool', APPROVAL_TOOL_FULL] : [])
       ],
+      // A card may wait for the user for hours; the tool call must not time out first.
+      ...(mcp ? { env: { MCP_TOOL_TIMEOUT: String(APPROVAL_WAIT_MS) } } : {}),
       stdin: withAttachmentNote(prompt, attachments),
       assignedSessionId: assigned
     }

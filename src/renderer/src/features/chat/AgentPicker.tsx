@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type KeyboardEvent } from 'react'
-import { Check, ChevronDown, Eye, ListTodo, LockOpen, RefreshCw, Search, Star, Zap } from 'lucide-react'
+import { Check, ChevronDown, Eye, ListTodo, LockOpen, RefreshCw, Search, ShieldQuestion, Star, Zap } from 'lucide-react'
 import type { ChatModel } from '@shared/domain/chat'
 import { CliLogo } from '../../components/cli/CliLogo'
 import { IconButton } from '../../components/ui/Button'
@@ -19,7 +19,18 @@ export interface AgentSetup {
   fast: boolean
   plan: boolean
   autoApprove: boolean
+  /** Ask before each tool, on CLIs whose catalog says they can (ADR 0073). */
+  ask: boolean
 }
+
+/** What the agent may do, as the picker shows it: Ask only on a CLI that asks (ADR 0073). */
+const ACCESS = {
+  read: { label: 'Read-only', icon: Eye },
+  ask: { label: 'Ask first', icon: ShieldQuestion },
+  full: { label: 'Full access', icon: LockOpen }
+} as const
+
+const accessOf = (setup: Pick<AgentSetup, 'autoApprove' | 'ask'>, asks: boolean): keyof typeof ACCESS => (setup.autoApprove ? 'full' : setup.ask && asks ? 'ask' : 'read')
 
 interface AgentPickerProps extends AgentSetup {
   /** Lists every chat CLI; else only the chat's own. */
@@ -62,7 +73,7 @@ const capitalize = (s: string): string => (s ? s[0]!.toUpperCase() + s.slice(1) 
  * the bottom Standard or Fast, Plan mode and what the agent may do. Picking a model of another CLI
  * switches both; the menu stays open until you are done.
  */
-export function AgentPicker({ cliId, model, effort, fast, plan, autoApprove, switchable, started, onChange }: AgentPickerProps) {
+export function AgentPicker({ cliId, model, effort, fast, plan, autoApprove, ask, switchable, started, onChange }: AgentPickerProps) {
   const catalogs = useChat((s) => s.catalogs)
   const clis = useClis((s) => s.clis)
   const current = catalogs[cliId]
@@ -70,6 +81,7 @@ export function AgentPicker({ cliId, model, effort, fast, plan, autoApprove, swi
   const currentModel = loaded?.models.find((m) => m.id === model)
   const shownEffort = effort || currentModel?.defaultEffort
   const cliName = (id: string): string => clis.find((c) => c.id === id)?.displayName ?? id
+  const access = ACCESS[accessOf({ autoApprove, ask }, Boolean(loaded?.prompts))]
 
   return (
     <Popover
@@ -81,21 +93,21 @@ export function AgentPicker({ cliId, model, effort, fast, plan, autoApprove, swi
           type="button"
           {...props}
           className={styles.trigger}
-          title={`${cliName(cliId)} · ${currentModel?.id || 'default model'}${shownEffort ? ` · ${shownEffort} effort` : ''} · ${autoApprove ? 'Full access' : 'Read-only'}${fast ? ' · Fast' : ''}${plan ? ' · Plan mode' : ''}`}
+          title={`${cliName(cliId)} · ${currentModel?.id || 'default model'}${shownEffort ? ` · ${shownEffort} effort` : ''} · ${access.label}${fast ? ' · Fast' : ''}${plan ? ' · Plan mode' : ''}`}
         >
           <CliLogo cliId={cliId} size="sm" />
           <span className={styles.triggerText}>{current === 'loading' ? 'Loading models…' : (currentModel?.label ?? 'Default model')}</span>
           {shownEffort && currentModel?.efforts?.length ? <span className={styles.triggerMeta}>{capitalize(shownEffort)}</span> : null}
           {fast && <Zap aria-label="Fast" className={styles.triggerIcon} />}
           {plan && <ListTodo aria-label="Plan mode" className={styles.triggerIcon} />}
-          {autoApprove ? <LockOpen aria-label="Full access" className={styles.triggerIcon} /> : <Eye aria-label="Read-only" className={styles.triggerIcon} />}
+          <access.icon aria-label={access.label} className={styles.triggerIcon} />
           <ChevronDown aria-hidden className={styles.chevron} />
         </button>
       )}
     >
       {() => (
         <PickerBody
-          setup={{ cliId, model, effort, fast, plan, autoApprove }}
+          setup={{ cliId, model, effort, fast, plan, autoApprove, ask }}
           clis={switchable ? undefined : [cliId]}
           cliName={cliName}
           started={started}
@@ -284,12 +296,12 @@ function PickerBody({ setup, clis: only, cliName, started, onChange }: PickerBod
         <Tabs
           label="What the agent may do"
           variant="segmented"
-          value={setup.autoApprove ? 'full' : 'read'}
-          onChange={(v) => onChange({ autoApprove: v === 'full' })}
-          options={[
-            { value: 'read', label: 'Read-only', icon: <Eye /> },
-            { value: 'full', label: 'Full access', icon: <LockOpen /> }
-          ]}
+          value={accessOf(setup, Boolean(current && current !== 'loading' && current.prompts))}
+          onChange={(v) => onChange({ autoApprove: v === 'full', ask: v === 'ask' })}
+          options={(['read', ...(current && current !== 'loading' && current.prompts ? (['ask'] as const) : []), 'full'] as const).map((value) => {
+            const { label, icon: Icon } = ACCESS[value]
+            return { value, label, icon: <Icon /> }
+          })}
         />
       </div>
     </div>
