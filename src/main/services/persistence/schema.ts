@@ -164,7 +164,8 @@ export const projectSchema: z.ZodType<Project> = z.object({
       emoji: z.string().regex(EMOJI).optional().catch(undefined),
       codeHost: z.enum([...CODE_HOSTS, 'none']).optional().catch(undefined),
       issueSource: z.enum([...TRACKERS, 'none']).optional().catch(undefined),
-      trackerGroup: str.optional()
+      trackerGroup: str.optional(),
+      useParentRepository: z.boolean().optional().catch(undefined)
     })
     .optional()
     .catch(undefined)

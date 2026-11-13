@@ -125,6 +125,8 @@ describe('Worktrees follow Git (ADR 0038)', () => {
     await workspaces.sync(root.id)
     const amber = await workspaces.create({ projectId: root.id, kind: 'isolated', name: 'Amber', cliSelections: [], autoApprove: false })
     const sub = await projects.open(join(repo, 'web'))
+    // The subfolder uses its parent's repository once chosen (ADR 0071).
+    projects.update(sub.id, { settings: { useParentRepository: true } })
     await workspaces.sync(sub.id)
     const names = (id: string) => workspaces.list(id).map((w) => [w.id, w.kind])
     expect(names(sub.id)).toEqual(names(root.id))
@@ -162,6 +164,8 @@ describe('one Main workspace per checkout (ADR 0021)', () => {
     const root = await projects.open(repo)
     const sub = await projects.open(join(repo, 'web'))
     expect(sub.id).not.toBe(root.id)
+    // One checkout once the subfolder uses its parent's repository (ADR 0071).
+    projects.update(sub.id, { settings: { useParentRepository: true } })
     await workspaces.create(main(root.id))
     await expect(workspaces.create(main(sub.id))).rejects.toMatchObject({ error: { code: 'INVALID_INPUT' } })
     // It can live in the other project instead, once removed from the first.
@@ -180,6 +184,7 @@ describe('one Main workspace per checkout (ADR 0021)', () => {
     const { repo, workspaces, projects } = setup()
     mkdirSync(join(repo, 'web'))
     const sub = await projects.open(join(repo, 'web'))
+    projects.update(sub.id, { settings: { useParentRepository: true } })
     await workspaces.create(main(sub.id))
     projects.remove(sub.id)
     const root = await projects.open(repo)

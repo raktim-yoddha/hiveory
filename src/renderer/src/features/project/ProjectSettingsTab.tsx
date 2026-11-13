@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { DEFAULT_BRANCH_PREFIX, type Project } from '@shared/domain'
+import { DEFAULT_BRANCH_PREFIX, parentRepository, usedRepository, type Project } from '@shared/domain'
 import type { GitInfo } from '@shared/domain/github'
 import { Button } from '../../components/ui/Button'
 import { Select } from '../../components/ui/Select'
@@ -12,6 +12,7 @@ import { RemoveProjectDialog } from '../projects/RemoveProjectDialog'
 import { SettingRow } from '../settings/SettingsPage'
 import { ChatDefaults } from './ChatDefaults'
 import { IntegrationSettings } from './IntegrationSettings'
+import { ParentRepositoryChoice, parentRepositoryText } from './ParentRepositoryChoice'
 import { ScriptsSettings } from './ScriptsSettings'
 import { WorkspaceLook } from './WorkspaceLook'
 import settings from '../settings/Settings.module.css'
@@ -28,11 +29,15 @@ export function ProjectSettingsTab({ project }: { project: Project }) {
   const [git, setGit] = useState<GitInfo | null>(null)
   const s = project.settings ?? {}
   const remote = Boolean(project.host)
+  // A repository in a parent folder is used only once chosen (ADR 0071).
+  const root = usedRepository(project)
+  const parent = parentRepository(project)
+  const chosenParent = s.useParentRepository ? parentRepository({ ...project, settings: { ...s, useParentRepository: false } }) : undefined
 
   useEffect(() => {
-    if (!project.repositoryRoot) return
+    if (!root) return
     void api('git.info', { projectId: project.id }).then(setGit, () => undefined)
-  }, [project.id, project.repositoryRoot])
+  }, [project.id, root])
 
   return (
     // Under its Settings page header, so it adds no padding of its own (ADR 0062).
@@ -52,9 +57,15 @@ export function ProjectSettingsTab({ project }: { project: Project }) {
         <SettingRow title="Folder" description={<span className={styles.mono}>{project.path}</span>} control={null} />
         <SettingRow
           title="Repository"
-          description={<span className={styles.mono}>{project.repositoryRoot ?? 'Not a Git repository: worktrees need Git.'}</span>}
+          description={<span className={styles.mono}>{parent ? parentRepositoryText(parent) : (root ?? 'Not a Git repository: worktrees need Git.')}</span>}
           control={
-            project.repositoryRoot ? null : (
+            parent ? (
+              <ParentRepositoryChoice project={project} />
+            ) : chosenParent ? (
+              <Button size="sm" variant="ghost" onClick={() => void update(project.id, { settings: { useParentRepository: null } })}>
+                Stop using it
+              </Button>
+            ) : root ? null : (
               <Button
                 size="sm"
                 onClick={() => void runAction('Initialize Git', () => api('git.init', { projectId: project.id, commit: true })).then(() => useProjects.getState().load())}
@@ -89,7 +100,7 @@ export function ProjectSettingsTab({ project }: { project: Project }) {
         </div>
       )}
 
-      {project.repositoryRoot && (
+      {root && (
         <div className={settings.group}>
           <div className={settings.groupTitle}>New worktrees</div>
           <SettingRow

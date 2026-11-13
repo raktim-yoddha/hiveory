@@ -5,7 +5,7 @@ import { EventEmitter } from 'node:events'
 import { mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, dirname, extname, join } from 'node:path'
-import type { ChatChoice, CliInstance } from '@shared/domain'
+import { parentRepository, type ChatChoice, type CliInstance } from '@shared/domain'
 import { CHAT_CLI_IDS, type ChatAttachment, type ChatCatalog, type ChatMessage, type ChatSession, type ChatSummary, type UsageLimits } from '@shared/domain/chat'
 import { chatAppends, chatSent, type ChatSent } from '@shared/domain/chat-delta'
 import { fail } from '@shared/errors'
@@ -329,7 +329,7 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
     // The reply shows as working at once, while the checkpoint is written.
     this.broadcast('chat.event', { chatId, message: structuredClone(reply), summary: this.summary(chat) })
     this.emit('run', chatId, true)
-    void this.checkpoint(chat.cwd).then((before) => {
+    void this.checkpoint(chat).then((before) => {
       if (before) reply.checkpoint = { before }
       if (run.stopped) {
         this.runs.delete(chatId)
@@ -354,10 +354,14 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
   }
 
   /** The folder as a Git tree before a turn, or undefined (not a repository, too slow, failed). */
-  private checkpoint(cwd: string): Promise<string | undefined> {
+  private checkpoint(chat: ChatSession): Promise<string | undefined> {
     if (!this.checkpoints) return Promise.resolve(undefined)
+    // Not in a repository of a parent folder the Workspace does not use (ADR 0071).
+    const workspace = chat.workspaceId ? this.workspaces.find(chat.workspaceId) : undefined
+    const project = workspace?.kind === 'main' ? this.workspaces.findProject(workspace.projectId) : undefined
+    if (project && parentRepository(project)) return Promise.resolve(undefined)
     return Promise.race([
-      this.checkpoints.snapshot(cwd).catch(() => undefined),
+      this.checkpoints.snapshot(chat.cwd).catch(() => undefined),
       new Promise<undefined>((done) => setTimeout(() => done(undefined), CHECKPOINT_TIMEOUT_MS))
     ])
   }
@@ -570,7 +574,7 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
     const before = reply.checkpoint?.before
     if (!before || !this.checkpoints) return
     try {
-      const after = await this.checkpoint(chat.cwd)
+      const after = await this.checkpoint(chat)
       if (!after) return
       reply.checkpoint = await this.checkpoints.measure(chat.cwd, before, after)
     } catch (error) {

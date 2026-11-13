@@ -3,13 +3,14 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { mainWorkspaceId, type Project } from '@shared/domain'
-import { AppException } from '@shared/errors'
+import { AppException, fail } from '@shared/errors'
 import type { AgentService } from '../agents/agent-service'
 import type { GitService } from '../git/git-service'
 import type { WorktreeService } from '../git/worktree-service'
 import { StateStore } from '../persistence/state-store'
 import { WorkspaceRepository } from './workspace-repository'
 import { WorkspaceService } from './workspace-service'
+import { ChangesService } from '../git/changes-service'
 import { localKitSource } from '../hosts/host-kit'
 
 const log = { info: () => undefined, warn: () => undefined, error: () => undefined }
@@ -177,6 +178,40 @@ describe('workspace creation', () => {
     })
     expect(await code(noRepo.service.create(input))).toBe('NOT_A_REPOSITORY')
     expect(await code(setup({ hasCommits: vi.fn(async () => false) }).service.create(input))).toBe('NO_COMMITS')
+  })
+})
+
+describe('a Workspace inside a larger repository (ADR 0071)', () => {
+  const inside = (chosen = false) => {
+    const kit = setup({ repositoryRoot: vi.fn(async () => '/'), localBranches: vi.fn(async () => ['main']), remoteBranches: vi.fn(async () => []) })
+    kit.store.update((s) => {
+      Object.assign(s.projects[0]!, { path: '/repo', repositoryRoot: '/', settings: chosen ? { useParentRepository: true } : undefined })
+      s.projects.push({ ...project, id: 'other12345', name: 'Other', path: '/other', repositoryRoot: '/', settings: chosen ? { useParentRepository: true } : undefined })
+    })
+    return kit
+  }
+
+  it('leaves Git off until the user chooses that repository', async () => {
+    const { service, repo } = inside()
+    await service.create({ ...input, kind: 'main', name: 'Main' })
+    expect(await code(service.create(input))).toBe('NOT_A_REPOSITORY')
+    expect(await service.gitStatus(mainWorkspaceId(project.id))).toBeNull()
+    expect((await service.gitInfo(project.id)).isRepo).toBe(false)
+    // Two Workspaces under the same unused repository are not one checkout.
+    expect(repo.mirrors(project.id)).toEqual([project.id])
+    const changes = new ChangesService(repo, { kit: async () => fail('INVALID_INPUT', 'no Git may run') } as never, () => undefined)
+    expect((await changes.list(mainWorkspaceId(project.id), { kind: 'uncommitted' })).note).toMatch(/larger Git repository/)
+    expect(await changes.commits(mainWorkspaceId(project.id))).toEqual([])
+    expect(await code(changes.commit(mainWorkspaceId(project.id), 'all of it'))).toBe('NOT_A_REPOSITORY')
+    expect(await code(changes.push(mainWorkspaceId(project.id)))).toBe('NOT_A_REPOSITORY')
+    expect(await code(changes.discard(mainWorkspaceId(project.id), ['a.txt']))).toBe('NOT_A_REPOSITORY')
+  })
+
+  it('uses it once chosen', async () => {
+    const { service, repo, calls } = inside(true)
+    await service.create(input)
+    expect(calls).toContain('create')
+    expect(repo.mirrors(project.id)).toEqual([project.id, 'other12345'])
   })
 })
 

@@ -1,4 +1,5 @@
 import type { ChangeSet, ChangeSource, CommitSummary } from '@shared/domain/changes'
+import { parentRepository } from '@shared/domain/project'
 import type { TurnCheckpoint } from '@shared/domain/chat'
 import { fail } from '@shared/errors'
 import type { HostKit } from '../hosts/host-kit'
@@ -31,7 +32,16 @@ export class ChangesService {
     private readonly turnTrees: TurnTrees
   ) {}
 
+  /** The repository in a parent folder the Primary Worktree would act on, while the user has not chosen it (ADR 0071). */
+  private unusedParent(workspaceId: string): string | undefined {
+    const workspace = this.repo.get(workspaceId)
+    return workspace.kind === 'main' ? parentRepository(this.repo.project(workspace.projectId)) : undefined
+  }
+
   private async gitIn(workspaceId: string): Promise<{ git: Git; base?: string }> {
+    // Commit, Push and Discard there would act on that whole repository.
+    const parent = this.unusedParent(workspaceId)
+    if (parent) fail('NOT_A_REPOSITORY', `This folder is inside the Git repository at ${parent}, which this Workspace does not use.`)
     const workspace = this.repo.get(workspaceId)
     const project = this.repo.project(workspace.projectId)
     const kit = await this.kits.kit(project.host)
@@ -72,6 +82,7 @@ export class ChangesService {
   }
 
   async list(workspaceId: string, source: ChangeSource): Promise<ChangeSet> {
+    if (this.unusedParent(workspaceId)) return { files: [], additions: 0, deletions: 0, note: 'This folder is inside a larger Git repository that this Workspace does not use.' }
     const { changes, base: configured } = await this.reader(workspaceId)
     const head = await changes.head()
     if (!head) return { files: [], additions: 0, deletions: 0, note: 'This folder is not a Git repository.' }
@@ -113,6 +124,7 @@ export class ChangesService {
 
   /** The branch's own commits (since its base), else the latest ones. */
   async commits(workspaceId: string): Promise<CommitSummary[]> {
+    if (this.unusedParent(workspaceId)) return []
     const { changes, base } = await this.reader(workspaceId)
     if (!(await changes.head())) return []
     const { from } = await this.branchBase(changes, base)

@@ -13,7 +13,7 @@ import type {
   VsCodeThemeExtension,
   WorkspaceView
 } from '@shared/domain'
-import { DEFAULT_SETTINGS } from '@shared/domain'
+import { DEFAULT_SETTINGS, usedRepository } from '@shared/domain'
 import type { AppInfo, RequestOf } from '@shared/ipc/contract'
 import { applyOperation } from '@shared/layout/operations'
 import { api } from '../lib/api'
@@ -56,9 +56,15 @@ interface ProjectState {
  */
 export const mirrorProjectIds = (projectId: string): string[] => {
   const projects = useProjects.getState().projects
-  const root = projects.find((p) => p.id === projectId)?.repositoryRoot
+  // A repository in a parent folder the user has not chosen to use is not shared (ADR 0071).
+  const project = projects.find((p) => p.id === projectId)
+  const root = project && usedRepository(project)
   const key = (path: string): string => path.replaceAll('\\', '/').toLowerCase()
-  return [projectId, ...(root ? projects.filter((p) => p.id !== projectId && p.repositoryRoot && key(p.repositoryRoot) === key(root)).map((p) => p.id) : [])]
+  const shares = (p: Project): boolean => {
+    const other = usedRepository(p)
+    return p.id !== projectId && other !== undefined && root !== undefined && key(other) === key(root)
+  }
+  return [projectId, ...projects.filter(shares).map((p) => p.id)]
 }
 
 export const useProjects = create<ProjectState>((set) => ({

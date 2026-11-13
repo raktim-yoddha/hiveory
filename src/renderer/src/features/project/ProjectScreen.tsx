@@ -1,5 +1,6 @@
 import { useEffect, type ReactNode } from 'react'
 import { CircleDot, FolderGit2, GitBranch, KanbanSquare } from 'lucide-react'
+import { usedRepository } from '@shared/domain'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { ErrorBoundary } from '../../components/ui/ErrorBoundary'
 import { PathTrail } from '../../components/ui/PathTrail'
@@ -64,7 +65,7 @@ export function ProjectScreen({ projectId, workspaceId }: { projectId: string; w
         <ErrorBoundary region={REGION[tab]} resetKey={`${projectId}:${tab}`}>
           {tab === 'tasks' && <KanbanBoard projectId={projectId} workspaceId={workspaceId} />}
           {tab === 'workspaces' && <WorkspacesTab projectId={projectId} />}
-          {tab === 'issues' && <IssuesTab projectId={projectId} local={!project.host && Boolean(project.repositoryRoot)} />}
+          {tab === 'issues' && <IssuesTab projectId={projectId} local={!project.host && Boolean(usedRepository(project))} />}
         </ErrorBoundary>
       </div>
     </section>

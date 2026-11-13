@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { statSync } from 'node:fs'
 import { basename, posix, resolve } from 'node:path'
-import { hostKey, type HostRef, type Project, type ProjectSettings } from '@shared/domain'
+import { hostKey, usedRepository, type HostRef, type Project, type ProjectSettings } from '@shared/domain'
 import type { RequestOf } from '@shared/ipc/contract'
 import { AppException, fail } from '@shared/errors'
 import type { AgentService } from '../agents/agent-service'
@@ -176,7 +176,8 @@ export class ProjectService {
   async initRepository(projectId: string, commit: boolean): Promise<Project> {
     const project = this.get(projectId)
     const git = (await this.kits.kit(project.host)).git
-    const existing = await git.repositoryRoot(project.path)
+    // A repository in a parent folder the user has not chosen is not this one's: the folder gets its own (ADR 0071).
+    const existing = usedRepository(project, await git.repositoryRoot(project.path))
     try {
       if (existing) {
         if (commit && !(await git.hasCommits(existing))) await git.init(existing, true)

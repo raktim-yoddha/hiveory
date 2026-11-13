@@ -3,7 +3,7 @@ import { connectAndSave, discover } from '../app/client'
 import { suggestHosts } from '../services/hosts/ssh-config'
 import { relaunch } from '../app/client-mode'
 import { HOST_PROTOCOL } from '@shared/host/protocol'
-import { hostKey, hostLabel, isOpenableUrl, lastWords, type AgentSession } from '@shared/domain'
+import { hostKey, hostLabel, isOpenableUrl, lastWords, usedRepository, type AgentSession } from '@shared/domain'
 import { fail } from '@shared/errors'
 import type { Container } from '../app/container'
 import { WALLPAPER_EXTENSIONS } from '../services/appearance/wallpaper-service'
@@ -37,7 +37,8 @@ const remoteHost = (c: Container, projectId: string): HostRef => {
 export const createHandlers = (c: Container, options: { trustPaths?: boolean } = {}): Handlers => {
   const repoRootOf = async (projectId: string): Promise<string | undefined> => {
     const project = c.workspaceRepo.project(projectId)
-    return project.repositoryRoot ?? (await (await c.hosts.kit(project.host)).git.repositoryRoot(project.path))
+    // Not a repository in a parent folder the user has not chosen to use (ADR 0071).
+    return usedRepository(project, project.repositoryRoot ?? (await (await c.hosts.kit(project.host)).git.repositoryRoot(project.path)))
   }
   /** GitHub runs this computer's gh against a local checkout; remote projects use it from their own terminals. */
   const localOnly = (projectId: string, what: string): void => {
@@ -577,9 +578,8 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
 
   'git.info': ({ projectId, fetch }) => c.workspaces.gitInfo(projectId, fetch),
   'git.validateBranch': async ({ projectId, name }) => {
-    const project = c.workspaceRepo.project(projectId)
-    const kit = await c.hosts.kit(project.host)
-    const repoRoot = project.repositoryRoot ?? (await kit.git.repositoryRoot(project.path))
+    const kit = await c.hosts.kit(c.workspaceRepo.project(projectId).host)
+    const repoRoot = await repoRootOf(projectId)
     if (!repoRoot) return { problem: 'This workspace is not a Git repository.' }
     const problem = await kit.git.branchNameProblem(repoRoot, name)
     if (problem) return { problem }

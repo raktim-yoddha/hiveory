@@ -216,6 +216,7 @@ Primary Worktree:
 
 - exists as soon as the Workspace is added; it is not offered in Create worktree (ADR 0038)
 - one checkout hosts one worktree app-wide: if two workspaces share a repository (root and subfolder, or a linked worktree opened as a workspace), only one of them can have the Primary worktree (ADR 0021)
+- a Workspace inside a larger repository (Git finds the repository in a folder above it) leaves Git off until the user chooses: Use that repository, or Give this folder its own; it shares that repository with other Workspaces only once both use it (ADR 0071)
 - maps to the original workspace folder
 - is never deleted from disk; removing it removes the whole Workspace from Hiveory (archived, folder untouched; ADR 0038)
 - can run CLI instances

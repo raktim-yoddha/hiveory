@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { CODE_HOST_INFO, CODE_HOSTS, TRACKER_INFO, TRACKERS, type CodeHostId, type IntegrationsView, type TrackerGroup, type TrackerId } from '@shared/domain/integrations'
-import type { Project } from '@shared/domain'
+import { usedRepository, type Project } from '@shared/domain'
 import { Button } from '../../components/ui/Button'
 import { Select } from '../../components/ui/Select'
 import { api } from '../../lib/api'
@@ -20,7 +20,7 @@ export function IntegrationSettings({ project }: { project: Project }) {
   const [loaded, setLoaded] = useState<{ tracker: TrackerId; groups: TrackerGroup[] } | null>(null)
   const s = project.settings ?? {}
   const tracker = s.issueSource && s.issueSource !== 'none' ? s.issueSource : undefined
-  const local = Boolean(project.repositoryRoot) && !project.host
+  const local = Boolean(usedRepository(project)) && !project.host
 
   useEffect(() => {
     void api('integrations.status', undefined).then(setView, () => undefined)

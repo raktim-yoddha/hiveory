@@ -74,7 +74,31 @@ export interface ProjectSettings {
   issueSource?: TrackerId | 'none'
   /** The Jira project or Linear team key when `issueSource` names one. */
   trackerGroup?: string
+  /** The user chose to use the Git repository of a folder above this one (ADR 0071). */
+  useParentRepository?: boolean
 }
+
+/** A folder path compared across spellings: \ or /, a trailing slash, a Windows drive's case. */
+const pathKey = (path: string): string => {
+  const plain = path.replace(/\\/g, '/').replace(/(.)\/+$/, '$1')
+  return /^[a-z]:/i.test(plain) ? plain.toLowerCase() : plain
+}
+
+type RepositoryFacts = Pick<Project, 'path' | 'repositoryRoot' | 'settings'>
+
+/**
+ * The Git repository of a folder above the Workspace's, while the user has not chosen to use it
+ * (ADR 0071). As VS Code does, Hiveory then leaves its Git features off: Commit, Push and Discard
+ * there would act on that whole repository, often far more than the Workspace (a repository
+ * started in a parent of all one's projects). `root` is the repository found for the folder,
+ * the stored one by default.
+ */
+export const parentRepository = (project: RepositoryFacts, root = project.repositoryRoot): string | undefined =>
+  root && pathKey(root) !== pathKey(project.path) && !project.settings?.useParentRepository ? root : undefined
+
+/** The repository Hiveory's Git features use for the Workspace: its own, or a parent's once chosen (ADR 0071). */
+export const usedRepository = (project: RepositoryFacts, root = project.repositoryRoot): string | undefined =>
+  root && !parentRepository(project, root) ? root : undefined
 
 /** A Workspace's named command (ADR 0061), run in a terminal of the worktree it is started in. */
 export interface WorkspaceScript {

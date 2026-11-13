@@ -197,7 +197,9 @@ export const projectSettingsPatchSchema = z.object({
   // ADR 0040: its code host and where its issues come from.
   codeHost: z.enum([...CODE_HOSTS, 'none']).nullable().optional(),
   issueSource: z.enum([...TRACKERS, 'none']).nullable().optional(),
-  trackerGroup: z.string().regex(/^[A-Za-z][A-Za-z0-9_]{0,19}$/).nullable().optional()
+  trackerGroup: z.string().regex(/^[A-Za-z][A-Za-z0-9_]{0,19}$/).nullable().optional(),
+  // ADR 0071: use the Git repository of a folder above this one.
+  useParentRepository: z.boolean().nullable().optional()
 })
 
 export const createWorkspaceSchema = z.object({

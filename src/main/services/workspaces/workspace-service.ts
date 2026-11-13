@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
-import { branchPrefixOf, DEFAULT_BRANCH_PREFIX, mainWorkspaceId, PRIMARY_NAME, type Project, type Workspace, type WorkspaceView } from '@shared/domain'
+import { branchPrefixOf, DEFAULT_BRANCH_PREFIX, mainWorkspaceId, parentRepository, PRIMARY_NAME, usedRepository, type Project, type Workspace, type WorkspaceView } from '@shared/domain'
 import type { GitInfo } from '@shared/domain/github'
 import { stripRemote, type GitStatus } from '../git/git-commands'
 import { AppException, fail } from '@shared/errors'
@@ -42,8 +42,9 @@ export class WorkspaceService {
     return this.kits.kit(project.host)
   }
 
+  /** The repository its Git features use; not one in a parent folder the user has not chosen (ADR 0071). */
   private async repoRootOf(project: Project, kit: HostKit): Promise<string | undefined> {
-    return project.repositoryRoot ?? (await kit.git.repositoryRoot(project.path))
+    return usedRepository(project, project.repositoryRoot ?? (await kit.git.repositoryRoot(project.path)))
   }
 
   /**
@@ -249,6 +250,13 @@ export class WorkspaceService {
     const repoRoot = await this.repoRootOf(project, kit)
     const entries = repoRoot ? await kit.worktrees.list(repoRoot).catch(() => null) : null
     if (!repoRoot || !entries) {
+      // Not in Git (or in a parent folder's repository it does not use, ADR 0071): the Primary shows no branch.
+      const main = this.repo.main(project)
+      if (!repoRoot && main?.git?.branch) {
+        const { branch: _, ...git } = main.git
+        this.repo.save({ ...main, git })
+        changed = true
+      }
       // No Git to ask: a worktree whose folder is gone can only be a leftover, never a real one (ADR 0039).
       for (const workspace of this.repo.isolated(projectId)) {
         if (await kit.fs.exists(workspace.git?.worktreePath ?? workspace.path)) continue
@@ -365,7 +373,10 @@ export class WorkspaceService {
   /** Live branch status of a workspace folder (changes, ahead/behind). */
   async gitStatus(workspaceId: string): Promise<GitStatus | null> {
     const workspace = this.repo.get(workspaceId)
-    const kit = await this.kitOf(this.repo.project(workspace.projectId))
+    const project = this.repo.project(workspace.projectId)
+    // No git button while its repository is one in a parent folder the user has not chosen (ADR 0071).
+    if (workspace.kind === 'main' && parentRepository(project)) return null
+    const kit = await this.kitOf(project)
     if (!(await kit.fs.exists(workspace.path))) return null
     return kit.git.status(workspace.path)
   }

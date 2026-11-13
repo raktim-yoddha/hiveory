@@ -1,6 +1,7 @@
 import { memo, useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { ArrowRight, ChevronDown, ChevronRight, Dot, GitBranch, GitCommitHorizontal, GitCompareArrows, Loader2, Maximize2, Minus, Plus, RefreshCw, SquarePen, Undo2 } from 'lucide-react'
 import type { ChangedFile, ChangeSource } from '@shared/domain/changes'
+import { mainWorkspaceId, parentRepository } from '@shared/domain'
 import { FileIcon } from '../../components/files/FileIcon'
 import { IconButton } from '../../components/ui/Button'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
@@ -9,6 +10,8 @@ import { Menu } from '../../components/ui/Menu'
 import { api } from '../../lib/api'
 import { cx } from '../../lib/cx'
 import { runAction } from '../../stores/notices'
+import { useProjects } from '../../stores/data'
+import { ParentRepositoryChoice, parentRepositoryText } from '../project/ParentRepositoryChoice'
 import { buildChangeTree, changedCount, omittedNote, shortCount, type ChangeNode } from './change-tree'
 import { DiffView } from './DiffView'
 import { openReview, useChangesView } from './changes-store'
@@ -43,6 +46,9 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
   const { source, choose, commits, items, label } = useChangeSource(workspaceId, changes)
   const [showCommits, setShowCommits] = useState(false)
   const tree = useMemo(() => buildChangeTree(changes?.files ?? []), [changes])
+  // The Primary Worktree of a Workspace inside a larger repository it does not use (ADR 0071).
+  const insideOf = useProjects((s) => s.projects.find((p) => mainWorkspaceId(p.id) === workspaceId))
+  const parent = insideOf && parentRepository(insideOf)
 
   return (
     <div className={styles.panel}>
@@ -77,6 +83,14 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
           <div className={styles.loading}>
             <Loader2 className="spin" aria-hidden /> Reading changes…
           </div>
+        ) : parent && insideOf ? (
+          <EmptyState
+            compact
+            icon={<GitCompareArrows />}
+            title="Git is off in this Workspace"
+            description={parentRepositoryText(parent)}
+            actions={<ParentRepositoryChoice project={insideOf} onDone={() => void refresh()} />}
+          />
         ) : changes.note ? (
           <EmptyState compact icon={<GitCompareArrows />} title="No changes to show" description={changes.note} />
         ) : changes.files.length === 0 ? (

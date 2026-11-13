@@ -1,6 +1,6 @@
 import { realpathSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { hostKey, mainWorkspaceId, PRIMARY_NAME, type Project, type Workspace } from '@shared/domain'
+import { hostKey, mainWorkspaceId, PRIMARY_NAME, usedRepository, type Project, type Workspace } from '@shared/domain'
 import { fail } from '@shared/errors'
 import type { PersistedState } from '../persistence/schema'
 import type { StateStore } from '../persistence/state-store'
@@ -29,7 +29,7 @@ export const realFolder = (path: string): string => {
 
 /** The working tree a workspace runs agents in: a Main workspace uses the project's whole checkout. */
 const treeOf = (workspace: Workspace, project: Project | undefined): string =>
-  workspace.kind === 'main' ? (project?.repositoryRoot ?? project?.path ?? workspace.path) : (workspace.git?.worktreePath ?? workspace.path)
+  workspace.kind === 'main' ? ((project && usedRepository(project)) ?? project?.path ?? workspace.path) : (workspace.git?.worktreePath ?? workspace.path)
 
 /**
  * The open workspace that already runs agents in `project`'s main working tree, from
@@ -38,7 +38,8 @@ const treeOf = (workspace: Workspace, project: Project | undefined): string =>
  * two Main workspaces running agents on the same files (ADR 0021).
  */
 export const mainTreeOwner = (state: PersistedState, project: Project): { project: Project; workspace: Workspace } | undefined => {
-  const tree = treeKey(project.repositoryRoot ?? project.path, project.host)
+  // A repository in a parent folder the user has not chosen to use is not this Workspace's (ADR 0071).
+  const tree = treeKey(usedRepository(project) ?? project.path, project.host)
   for (const workspace of state.workspaces) {
     if (workspace.projectId === project.id) continue
     const owner = state.projects.find((p) => p.id === workspace.projectId)
@@ -66,7 +67,7 @@ export class WorkspaceRepository {
     const { projects, workspaces, archive } = this.store.state
     const hostOf = new Map([...projects, ...archive.map((a) => a.project)].map((p) => [p.id, p.host]))
     return new Set([
-      ...projects.map((p) => treeKey(p.repositoryRoot ?? p.path, p.host)),
+      ...projects.map((p) => treeKey(usedRepository(p) ?? p.path, p.host)),
       ...[...workspaces, ...archive.flatMap((a) => a.workspaces)].flatMap((w) => (w.git?.worktreePath ? [treeKey(w.git.worktreePath, hostOf.get(w.projectId))] : []))
     ])
   }
@@ -78,8 +79,16 @@ export class WorkspaceRepository {
   mirrors(projectId: string): string[] {
     const project = this.findProject(projectId)
     if (!project) return [projectId]
-    const key = treeKey(project.repositoryRoot ?? project.path, project.host)
-    return [projectId, ...this.store.state.projects.filter((p) => p.id !== projectId && p.repositoryRoot && treeKey(p.repositoryRoot, p.host) === key).map((p) => p.id)]
+    const key = treeKey(usedRepository(project) ?? project.path, project.host)
+    return [
+      projectId,
+      ...this.store.state.projects
+        .filter((p) => {
+          const root = usedRepository(p)
+          return p.id !== projectId && root !== undefined && treeKey(root, p.host) === key
+        })
+        .map((p) => p.id)
+    ]
   }
 
   findProject(projectId: string): Project | undefined {
