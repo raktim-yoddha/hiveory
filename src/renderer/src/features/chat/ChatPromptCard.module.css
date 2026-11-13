@@ -44,7 +44,7 @@
   padding: var(--space-2);
   border-radius: var(--radius-sm);
   background: var(--fill-key-chosen);
-  box-shadow: var(--ring-key-chosen), var(--shadow-key);
+  box-shadow: var(--shadow-key);
   color: var(--color-accent-hover);
 }
 
@@ -198,7 +198,7 @@
 .optionOn:hover {
   border-color: transparent;
   background: var(--fill-key-chosen);
-  box-shadow: var(--ring-key-chosen), var(--shadow-key);
+  box-shadow: var(--shadow-key);
 }
 
 .check {
@@ -242,7 +242,7 @@
   font-size: var(--text-md);
 }
 
-/* The card's own buttons are keys too; its main action is brushed steel. */
+/* The card's own buttons are keys too; its main action is the plain white accent. */
 .card .actions .key {
   border-color: var(--color-border);
   background: var(--fill-key);
@@ -254,13 +254,7 @@
 }
 
 .card .actions .steel {
-  background: var(--fill-steel);
-  box-shadow: var(--shadow-steel);
-  color: var(--color-on-steel);
-}
-
-.card .actions .steel:not(:disabled):hover {
-  background: var(--fill-steel-hover);
+  box-shadow: var(--shadow-key);
 }
 
 .card .actions .key:not(:disabled):active,

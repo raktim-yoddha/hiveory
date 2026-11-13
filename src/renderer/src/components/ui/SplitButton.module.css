@@ -5,11 +5,11 @@
   align-items: stretch;
   height: var(--control-md);
   overflow: hidden;
-  /* Built like the steel button: no outline, a dark rim, a lit top edge (ADR 0018 amendment). */
+  /* A key: shaded, over a soft shadow, no outline (ADR 0018 amendment). */
   border: var(--border-width) solid transparent;
   border-radius: var(--radius-sm);
   background: var(--fill-key-dark);
-  box-shadow: var(--shadow-key-rim);
+  box-shadow: var(--shadow-key);
   -webkit-app-region: no-drag;
 }
 
@@ -40,8 +40,7 @@
 .more {
   padding: 0 var(--space-3);
   /* A cut between the halves: a dark groove with the catch-light beside it. */
-  border-left: var(--border-width) solid rgb(0 0 0 / 0.45);
-  box-shadow: inset var(--hairline) 0 0 rgb(255 255 255 / 0.12);
+  border-left: var(--border-width) solid var(--color-border);
 }
 
 /* The chevron alone opens the menu: the whole control is one button. */
@@ -91,35 +90,34 @@
   text-overflow: ellipsis;
 }
 
-/* The worktree's next git step stands out: the metal button. */
+/* The worktree's next git step stands out: the plain white accent, over the same soft shadow. */
 .primary {
   border-color: transparent;
-  background: var(--fill-steel);
-  box-shadow: var(--shadow-steel);
+  background: var(--color-accent);
+  box-shadow: var(--shadow-key);
 }
 
 .primary .main,
 .primary .more {
-  color: var(--color-on-steel);
+  color: var(--color-accent-contrast);
 }
 
 .primary .more {
-  border-left-color: rgb(0 0 0 / 0.45);
-  box-shadow: inset var(--hairline) 0 0 rgb(255 255 255 / 0.12);
+  border-left-color: color-mix(in srgb, var(--color-accent-contrast) 20%, transparent);
 }
 
 .primary .chevron {
-  color: var(--color-on-steel);
+  color: var(--color-accent-contrast);
 }
 
 .primary .main:not(:disabled):hover,
 .primary .more:hover {
-  background: var(--fill-steel-hover);
+  background: var(--color-accent-hover);
 }
 
 .primary .main:not(:disabled):active,
 .primary .more:active,
 .primary .more[aria-expanded='true'] {
-  background: var(--color-surface-active);
+  background: var(--color-accent);
   box-shadow: var(--shadow-key-pressed);
 }

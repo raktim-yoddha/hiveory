@@ -96,8 +96,9 @@ Every theme is flat: solid colors only — no gradients, sheen or textures. Cont
 have no resting outline; a border appears only on hover, focus or selection, and a
 pane's header shares its body's surface (no dividing line) (ADR 0018).
 One exception: the worktree bar's buttons, a chat's approval and question cards and the terminal
-find bar are key caps with depth (`--fill-key`, `--shadow-key`; their main action brushed steel,
-`--fill-steel`; chosen is silver, never the waiting color) (ADR 0018 amendment 2026-11-13). A pane that
+find bar are key caps with depth: shaded toward the bottom over a soft shadow, no edge lines
+(`--fill-key`, `--shadow-key`; their main action the plain white accent; chosen is silver, never the
+waiting color) (ADR 0018 amendment 2026-11-13). A pane that
 needs you shows a soft silver rim, not an ochre outline.
 
 Selection is a tinted fill, never an outline: selected chips, option cards and "on"

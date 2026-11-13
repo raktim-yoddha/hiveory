@@ -45,6 +45,6 @@
 .bar button[aria-pressed='true'],
 .bar button[aria-pressed='true']:not(:disabled):hover {
   background: var(--fill-key-chosen);
-  box-shadow: var(--ring-key-chosen), var(--shadow-key);
+  box-shadow: var(--shadow-key);
   color: var(--color-accent-hover);
 }
