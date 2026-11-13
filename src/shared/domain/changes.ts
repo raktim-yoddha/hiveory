@@ -30,9 +30,13 @@ export interface ChangeSet {
   branch?: string
   /** What `branch` is compared against. */
   base?: string
+  /** At most MAX_LISTED_FILES of them (main's changes.ts); `omitted` counts the rest. */
   files: ChangedFile[]
+  /** Over every changed file, listed or not. */
   additions: number
   deletions: number
+  /** Changed files past the listed ones (ADR 0064 amendment). */
+  omitted?: number
   /** Why there is nothing to list (not a repository, no base branch…). */
   note?: string
 }

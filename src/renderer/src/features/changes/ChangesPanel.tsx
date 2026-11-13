@@ -9,7 +9,7 @@ import { Menu } from '../../components/ui/Menu'
 import { api } from '../../lib/api'
 import { cx } from '../../lib/cx'
 import { runAction } from '../../stores/notices'
-import { buildChangeTree, shortCount, type ChangeNode } from './change-tree'
+import { buildChangeTree, changedCount, omittedNote, shortCount, type ChangeNode } from './change-tree'
 import { DiffView } from './DiffView'
 import { openReview, useChangesView } from './changes-store'
 import { useChangeSet } from './useChangeSet'
@@ -68,7 +68,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
         />
         {changes && <DiffStat additions={changes.additions} deletions={changes.deletions} />}
         <span className={styles.flex} />
-        {changes && changes.files.length > 0 && <span className={styles.count}>{changes.files.length} {changes.files.length === 1 ? 'file' : 'files'}</span>}
+        {changes && changes.files.length > 0 && <span className={styles.count}>{changedCount(changes).toLocaleString()} {changedCount(changes) === 1 ? 'file' : 'files'}</span>}
       </div>
       <div className={styles.body}>
         {error && !changes ? (
@@ -82,14 +82,17 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
         ) : changes.files.length === 0 ? (
           <EmptyState compact icon={<GitCompareArrows />} title="No changes" description={source.kind === 'uncommitted' ? 'Files the agents (or you) change here show up as they change.' : 'Nothing changed.'} />
         ) : (
-          <ul className={styles.tree} role="tree" aria-label="Changed files">
-            {tree.map((node) => (
-              <TreeNode key={node.kind === 'folder' ? node.path : node.file.path} node={node} depth={0} workspaceId={workspaceId} source={source} onChanged={refresh} />
-            ))}
-          </ul>
+          <>
+            <ul className={styles.tree} role="tree" aria-label="Changed files">
+              {tree.map((node) => (
+                <TreeNode key={node.kind === 'folder' ? node.path : node.file.path} node={node} depth={0} workspaceId={workspaceId} source={source} onChanged={refresh} />
+              ))}
+            </ul>
+            {changes.omitted ? <p className={styles.note}>{omittedNote(changes.omitted)}</p> : null}
+          </>
         )}
       </div>
-      <CommitBar workspaceId={workspaceId} changedFiles={source.kind === 'uncommitted' ? (changes?.files.length ?? 0) : 0} onDone={() => void refresh()} />
+      <CommitBar workspaceId={workspaceId} changedFiles={source.kind === 'uncommitted' && changes ? changedCount(changes) : 0} onDone={() => void refresh()} />
       {commits.length > 0 && (
         <div className={styles.commits}>
           <button type="button" className={styles.commitsToggle} aria-expanded={showCommits} onClick={() => setShowCommits(!showCommits)}>

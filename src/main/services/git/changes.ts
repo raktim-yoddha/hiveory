@@ -1,3 +1,4 @@
+import { createReadStream } from 'node:fs'
 import type { ChangedFile, ChangeSet, ChangeStatus, CommitSummary } from '@shared/domain/changes'
 
 /**
@@ -70,6 +71,49 @@ export const totals = (files: ChangedFile[]): Pick<ChangeSet, 'additions' | 'del
   deletions: files.reduce((n, f) => n + f.deletions, 0)
 })
 
+/**
+ * Most files a change set lists (ADR 0064 amendment). A folder inside a much larger repository (or
+ * one without a .gitignore) can have a hundred thousand untracked files: sent whole they froze the
+ * window for most of a minute. The window draws 1,000 rows in about 0.4 s; past that they are
+ * counted, not listed.
+ */
+export const MAX_LISTED_FILES = 1000
+
+/** The files of a change set as sent: the first MAX_LISTED_FILES, totals over all of them. */
+export const listed = (files: ChangedFile[]): Pick<ChangeSet, 'files' | 'additions' | 'deletions' | 'omitted'> => ({
+  files: files.length > MAX_LISTED_FILES ? files.slice(0, MAX_LISTED_FILES) : files,
+  ...totals(files),
+  ...(files.length > MAX_LISTED_FILES ? { omitted: files.length - MAX_LISTED_FILES } : {})
+})
+
+/** Git calls a file binary when its first 8,000 bytes hold a NUL (xdiff's buffer_is_binary). */
+const BINARY_PROBE = 8000
+
+/**
+ * An untracked file's lines, as `git diff --no-index --numstat` counts them, read here instead:
+ * starting a git process per file blocked the main process for about 16 ms each on Windows, 3 s
+ * for 200 files, and the whole app with it (ADR 0064 amendment).
+ */
+export const countNewFile = (path: string): Promise<{ additions: number; binary?: true }> =>
+  new Promise((resolve) => {
+    let lines = 0
+    let read = 0
+    let last = 10
+    const stream = createReadStream(path)
+    stream.on('data', (chunk: Buffer) => {
+      if (read < BINARY_PROBE && chunk.subarray(0, BINARY_PROBE - read).includes(0)) {
+        stream.destroy()
+        return resolve({ additions: 0, binary: true })
+      }
+      read += chunk.length
+      for (let at = chunk.indexOf(10); at >= 0; at = chunk.indexOf(10, at + 1)) lines++
+      last = chunk[chunk.length - 1] ?? last
+    })
+    // A last line without a line end still counts.
+    stream.on('end', () => resolve({ additions: lines + (read > 0 && last !== 10 ? 1 : 0) }))
+    stream.on('error', () => resolve({ additions: 0 }))
+  })
+
 /** `git log --format=%H%x1f%s%x1f%an%x1f%aI%x1e`. */
 export const parseLog = (out: string): CommitSummary[] =>
   out
@@ -133,8 +177,8 @@ export class WorktreeChanges {
     const extra = await Promise.all(
       added.map(async (path, i): Promise<ChangedFile> => {
         if (i >= MAX_COUNTED_UNTRACKED) return { path, status: 'added', additions: 0, deletions: 0 }
-        const c = parseNumstat(await this.git(['diff', '--no-index', '--numstat', '-z', '--', NULL_PATH, `${root}/${path}`], { ok: [1] }).catch(() => '')).values().next().value
-        return { path, status: 'added', additions: c?.additions ?? 0, deletions: 0, ...(c?.binary ? { binary: true } : {}) }
+        const c = await countNewFile(`${root}/${path}`)
+        return { path, status: 'added', additions: c.additions, deletions: 0, ...(c.binary ? { binary: true } : {}) }
       })
     )
     return [...tracked, ...extra].sort((a, b) => a.path.localeCompare(b.path))

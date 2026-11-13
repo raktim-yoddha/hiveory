@@ -49,3 +49,28 @@ The side panel has five tabs (ADR 0062 said four). A diff is unified only; side-
 later. GitLab shows its pipeline as one check rather than each job. Merging needs `gh` or `glab`
 signed in, as pull requests already did. Opening in an editor uses its command-line launcher (or its
 macOS app); an editor installed without either is not offered.
+
+## Amendment (2026-11-13): a change list stops at 1,000 files
+
+Decided by the product owner, 2026-11-13, after Commit froze the whole app on a Worktree inside a
+much larger Git repository (110,083 untracked files).
+
+**Context.** The Changes tab and the Review pane listed every changed file. On that Worktree main
+started 200 `git` processes at once to count untracked lines (each start blocks main about 16 ms on
+Windows: 3.3 s with nothing answering), sent a 16.9 MB list, and the window built its tree by
+searching each folder's rows, then drew 119,000 rows: 43 s in one blocked task.
+
+**Decision.**
+
+- A change set lists at most 1,000 files (`MAX_LISTED_FILES`); `ChangeSet.omitted` counts the rest,
+  and the totals (`additions`, `deletions`) cover every file. The tab and the pane show the full count
+  and, under the list, how many more files are not listed and that folders not kept in Git belong in
+  `.gitignore`. Committing still commits every file.
+- Untracked files' lines are counted by reading them in main (`countNewFile`: git's rules, binary when
+  the first 8,000 bytes hold a NUL), not by a `git` process per file.
+- The tree finds a folder by its path in a map.
+
+**Consequences.** Measured on that Worktree: main's longest stall 3.3 s → 92 ms, the window's longest
+task 43 s → 0.44 s, the list 16.9 MB → 0.1 MB. A change of more than 1,000 files can be committed
+but not reviewed file by file here past the first 1,000; a list drawn only where it is scrolled is left
+for when someone needs that.

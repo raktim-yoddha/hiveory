@@ -4,7 +4,7 @@ import { fail } from '@shared/errors'
 import type { HostKit } from '../hosts/host-kit'
 import type { WorkspaceRepository } from '../workspaces/workspace-repository'
 import type { KitSource } from '../workspaces/workspace-service'
-import { totals, WorktreeChanges, type Git } from './changes'
+import { listed, WorktreeChanges, type Git } from './changes'
 import { commitAll, discardFiles, pushBranch } from './commit-changes'
 import { GitCommandError } from './git-service'
 
@@ -78,21 +78,21 @@ export class ChangesService {
     const branch = await changes.branch()
     if (source.kind === 'uncommitted') {
       const files = await changes.againstWorktree(head)
-      return { branch, files, ...totals(files) }
+      return { branch, ...listed(files) }
     }
     if (source.kind === 'branch') {
       const { from, base } = await this.branchBase(changes, configured)
       if (!from) return { branch, files: [], additions: 0, deletions: 0, note: 'No base branch to compare with.' }
       const files = await changes.againstWorktree(from)
-      return { branch, base, files, ...totals(files) }
+      return { branch, base, ...listed(files) }
     }
     if (source.kind === 'commit') {
       const files = await changes.commit(source.sha)
-      return { branch, base: source.sha.slice(0, 7), files, ...totals(files) }
+      return { branch, base: source.sha.slice(0, 7), ...listed(files) }
     }
     const turn = this.turn(source)
     const files = turn.after ? await changes.between(turn.before, turn.after) : await changes.againstWorktree(turn.before)
-    return { branch, files, ...totals(files) }
+    return { branch, ...listed(files) }
   }
 
   /** One file's unified diff for the same source. */

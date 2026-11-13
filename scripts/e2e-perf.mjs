@@ -490,6 +490,53 @@ await test("opening the Worktree bar's menus (Run, Open in, Git), and again whil
   await page.waitForTimeout(6000)
 })
 
+await test('Commit on a worktree with 20,000 untracked files keeps the app answering (ADR 0064 amendment)', async () => {
+  // A Worktree inside a much larger repository: before, main started a git per untracked file and the
+  // window built and drew every row, and the app froze for most of a minute.
+  const dump = join(repo, 'dump')
+  for (let d = 0; d < 4; d++) {
+    mkdirSync(join(dump, `part${d}`), { recursive: true })
+    for (let i = 0; i < 5000; i++) writeFileSync(join(dump, `part${d}`, `f${i}.txt`), 'line\n')
+  }
+  try {
+    await app.evaluate(() => {
+      globalThis.__stall = process.getBuiltinModule('node:perf_hooks').monitorEventLoopDelay({ resolution: 10 })
+      globalThis.__stall.enable()
+    })
+    await page.evaluate(() => {
+      window.__long = []
+      window.__obs?.disconnect()
+      window.__obs = new PerformanceObserver((list) => window.__long.push(...list.getEntries().map((e) => ({ ms: e.duration }))))
+      window.__obs.observe({ type: 'longtask', buffered: false })
+    })
+    // The git button reads the status again when the window gets focus.
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')))
+    const commit = page.locator('header[aria-label="Worktree"]').getByRole('button', { name: 'Commit', exact: true })
+    await waitFor(async () => commit.isEnabled(), 'the Commit button', 30_000)
+    const started = Date.now()
+    await commit.click()
+    await page.getByText(/more files are not listed/).waitFor({ timeout: 60_000 })
+    const shown = Date.now() - started
+    await page.waitForTimeout(500)
+    const main = await app.evaluate(() => {
+      globalThis.__stall.disable()
+      return Math.round(globalThis.__stall.max / 1e6)
+    })
+    const longest = await page.evaluate(() => Math.round(Math.max(0, ...window.__long.map((l) => l.ms))))
+    record('bigChanges.listShown', shown, 'ms', { compare: false })
+    record('bigChanges.mainLongestStall', main, 'ms', { goal: 250, compare: false })
+    record('bigChanges.windowLongestTask', longest, 'ms', { goal: 1000, compare: false })
+    expect(await page.getByText(/^2\d,\d{3} files$/).count(), 'the Changes tab does not count every file')
+    if (mode !== 'report') {
+      expect(main <= 250, `main stalled ${main} ms while listing the changes`)
+      expect(longest <= 1000, `the window blocked ${longest} ms drawing the changes`)
+    }
+  } finally {
+    rmSync(dump, { recursive: true, force: true })
+    await page.getByRole('button', { name: 'Hide side panel' }).first().click().catch(() => undefined)
+  }
+})
+
 await test('budgets: every action paints within a few frames and never blocks for long', async () => {
   // A shared CI runner is slower than any user's machine: there the numbers are reported only.
   if (mode === 'report') return console.log('      not held (report only)')

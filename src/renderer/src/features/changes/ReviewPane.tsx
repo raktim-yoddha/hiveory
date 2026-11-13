@@ -13,6 +13,7 @@ import { PaneFrame } from '../panes/PaneFrame'
 import { registerPaneCloser } from '../panes/pane-commands'
 import type { PaneRenderProps } from '../panes/PaneLayout'
 import { DiffStat, useChangeSetFor } from './ChangesPanel'
+import { changedCount, omittedNote } from './change-tree'
 import { DiffView } from './DiffView'
 import { useChangeSource } from './useChangeSource'
 import styles from './ReviewPane.module.css'
@@ -62,7 +63,7 @@ export function ReviewPane({ editor, onDragHandlePointerDown, toggleMaximize, ta
             )}
           />
           {changes && <DiffStat additions={changes.additions} deletions={changes.deletions} />}
-          {files.length > 0 && <span className={styles.count}>{files.length === 1 ? '1 file' : `${files.length} files`}</span>}
+          {changes && files.length > 0 && <span className={styles.count}>{changedCount(changes) === 1 ? '1 file' : `${changedCount(changes).toLocaleString()} files`}</span>}
           <span className={styles.flex} />
           {files.length > 1 && (
             <IconButton
@@ -85,7 +86,10 @@ export function ReviewPane({ editor, onDragHandlePointerDown, toggleMaximize, ta
           ) : files.length === 0 ? (
             <EmptyState compact icon={<GitCompareArrows />} title="Nothing to review" description={source.kind === 'uncommitted' ? 'Files the agents (or you) change here show up as they change.' : 'Nothing changed.'} />
           ) : (
-            files.map((file) => <FileDiff key={file.path} file={file} workspaceId={workspaceId} source={source} sourceKey={sourceKey} folded={folded.has(file.path)} onToggle={toggle} />)
+            <>
+              {files.map((file) => <FileDiff key={file.path} file={file} workspaceId={workspaceId} source={source} sourceKey={sourceKey} folded={folded.has(file.path)} onToggle={toggle} />)}
+              {changes.omitted ? <p className={styles.note}>{omittedNote(changes.omitted)}</p> : null}
+            </>
           )}
         </div>
       </div>

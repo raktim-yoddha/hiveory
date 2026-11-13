@@ -8,7 +8,7 @@ import { Checkpoints } from '../chat/checkpoints'
 import { claudeParser, codexParser, toTasks } from '../chat/parsers'
 import { parseClaudeCommands } from '../chat/providers'
 import { gitOn } from './changes-service'
-import { mergeChanges, parseLog, parseNameStatus, parseNumstat, WorktreeChanges } from './changes'
+import { countNewFile, listed, MAX_LISTED_FILES, mergeChanges, parseLog, parseNameStatus, parseNumstat, WorktreeChanges } from './changes'
 
 describe('git change parsing (ADR 0058)', () => {
   it('joins name-status and numstat, renames and binaries included', () => {
@@ -110,6 +110,27 @@ describe.skipIf(!hasGit)('turn checkpoints on a real repository (ADR 0058)', () 
       { path: 'mine.txt', status: 'added', additions: 1, deletions: 0 }
     ])
     expect(await changes.fileAgainstWorktree('HEAD', 'mine.txt', true)).toContain('+the user was here')
+  })
+
+  it('counts untracked files as git does: a last line without its end, binary files (ADR 0064 amendment)', async () => {
+    writeFileSync(join(dir, 'open-end.txt'), 'one\ntwo\nthree')
+    writeFileSync(join(dir, 'empty.txt'), '')
+    writeFileSync(join(dir, 'img.bin'), Buffer.from([137, 80, 78, 71, 0, 1, 2, 10, 10]))
+    writeFileSync(join(dir, 'big.txt'), 'line\n'.repeat(100_000))
+    expect(await countNewFile(join(dir, 'open-end.txt'))).toEqual({ additions: 3 })
+    expect(await countNewFile(join(dir, 'empty.txt'))).toEqual({ additions: 0 })
+    expect(await countNewFile(join(dir, 'img.bin'))).toEqual({ additions: 0, binary: true })
+    expect(await countNewFile(join(dir, 'big.txt'))).toEqual({ additions: 100_000 })
+    expect(await countNewFile(join(dir, 'missing.txt'))).toEqual({ additions: 0 })
+  })
+
+  it('lists at most MAX_LISTED_FILES files and counts the rest (ADR 0064 amendment)', () => {
+    const files = Array.from({ length: MAX_LISTED_FILES + 5 }, (_, i) => ({ path: `f${i}`, status: 'added' as const, additions: 1, deletions: 0 }))
+    const sent = listed(files)
+    expect(sent.files).toHaveLength(MAX_LISTED_FILES)
+    expect(sent.omitted).toBe(5)
+    expect(sent.additions).toBe(MAX_LISTED_FILES + 5)
+    expect(listed(files.slice(0, 3))).toEqual({ files: files.slice(0, 3), additions: 3, deletions: 0 })
   })
 
   it('is no checkpoint outside a repository', async () => {

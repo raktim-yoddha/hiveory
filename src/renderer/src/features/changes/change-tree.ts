@@ -1,4 +1,4 @@
-import type { ChangedFile } from '@shared/domain/changes'
+import type { ChangedFile, ChangeSet } from '@shared/domain/changes'
 
 export interface ChangeFolder {
   kind: 'folder'
@@ -24,14 +24,17 @@ export type ChangeNode = ChangeFolder | ChangeLeaf
  */
 export const buildChangeTree = (files: ChangedFile[]): ChangeNode[] => {
   const root: ChangeFolder = { kind: 'folder', path: '', name: '', additions: 0, deletions: 0, children: [] }
+  // Folders by path: searching a folder's children instead took seconds per thousand files in one folder.
+  const folders = new Map<string, ChangeFolder>()
   for (const file of files) {
     const parts = file.path.split('/')
     let folder = root
     for (const part of parts.slice(0, -1)) {
       const path = folder.path ? `${folder.path}/${part}` : part
-      let next = folder.children.find((c): c is ChangeFolder => c.kind === 'folder' && c.path === path)
+      let next = folders.get(path)
       if (!next) {
         next = { kind: 'folder', path, name: part, additions: 0, deletions: 0, children: [] }
+        folders.set(path, next)
         folder.children.push(next)
       }
       folder = next
@@ -50,5 +53,12 @@ export const buildChangeTree = (files: ChangedFile[]): ChangeNode[] => {
   }
   return finish(root).children
 }
+
+/** Every changed file, listed or not (ADR 0064 amendment). */
+export const changedCount = (set: ChangeSet): number => set.files.length + (set.omitted ?? 0)
+
+/** Said under a list that stops at the limit. */
+export const omittedNote = (omitted: number): string =>
+  `${omitted.toLocaleString()} more ${omitted === 1 ? 'file is' : 'files are'} not listed. Folders you don't keep in Git (dependencies, build output) belong in .gitignore.`
 
 export { diffLines, shortCount, type DiffLine } from '@shared/domain/diff'
