@@ -12,6 +12,23 @@ const fold = (parser: LineParser, lines: string[]) => {
 }
 
 describe('claude stream-json', () => {
+  it('settles a block sent on its own after thinking onto its streamed text, not beside it', () => {
+    const se = (event: object) => JSON.stringify({ type: 'stream_event', event })
+    const { message } = fold(claudeParser(), [
+      se({ type: 'message_start', message: { id: 'm2' } }),
+      se({ type: 'content_block_start', index: 0, content_block: { type: 'thinking' } }),
+      se({ type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'hm' } }),
+      '{"type":"assistant","message":{"id":"m2","content":[{"type":"thinking","thinking":"hmm"}]}}',
+      se({ type: 'content_block_stop', index: 0 }),
+      se({ type: 'content_block_start', index: 1, content_block: { type: 'text' } }),
+      se({ type: 'content_block_delta', index: 1, delta: { type: 'text_delta', text: 'RO-SEEN' } }),
+      '{"type":"assistant","message":{"id":"m2","content":[{"type":"text","text":"RO-SEEN, denied."}]}}',
+      se({ type: 'content_block_stop', index: 1 }),
+      '{"type":"result","subtype":"success"}'
+    ])
+    expect(message.parts.filter((p) => p.kind === 'text')).toEqual([{ kind: 'text', text: 'RO-SEEN, denied.' }])
+  })
+
   it('streams deltas then settles on the final text without duplicating', () => {
     const { acc, message } = fold(claudeParser(), [
       '{"type":"system","subtype":"init","session_id":"s-1"}',

@@ -81,6 +81,8 @@ const plainError = (line: string): ChatEvent[] => (/^\s*(error|fatal)\b[:\s]/i.t
  */
 export const claudeParser = (): LineParser => {
   let messageId = 'm0'
+  /** The block being streamed: Claude Code sends each finished block as its own one-block message, before its stop. */
+  let openIndex: number | undefined
   return (line) => {
     const j = parseJson(line)
     if (!j) return plainError(line)
@@ -88,8 +90,12 @@ export const claudeParser = (): LineParser => {
     const sessionId = s(j.session_id)
     const handleStreamEvent = (event: Record<string, unknown>): void => {
       const type = s(event.type)
-      if (type === 'message_start') messageId = s(rec(event.message).id) ?? messageId
+      if (type === 'message_start') {
+        messageId = s(rec(event.message).id) ?? messageId
+        openIndex = undefined
+      }
       if (type === 'content_block_start') {
+        if (typeof event.index === 'number') openIndex = event.index
         const block = rec(event.content_block)
         if (block.type === 'tool_use') {
           out.push({ type: 'tool', id: s(block.id) ?? `${messageId}:${String(event.index)}`, name: s(block.name), status: 'running' })
@@ -118,9 +124,12 @@ export const claudeParser = (): LineParser => {
         const message = rec(j.message)
         const id = s(message.id) ?? messageId
         const content = Array.isArray(message.content) ? message.content : []
+        // A one-block message is the block being streamed: its key must match the streamed text's, or a
+        // reply that thought first shows its text twice.
+        const single = content.length === 1 && id === messageId && openIndex !== undefined
         content.forEach((raw, index) => {
           const block = rec(raw)
-          const key = `${id}:${index}`
+          const key = `${id}:${single ? openIndex : index}`
           if (block.type === 'text' && typeof block.text === 'string') out.push({ type: 'text', key, full: block.text })
           if (block.type === 'thinking' && typeof block.thinking === 'string') out.push({ type: 'thinking', key, full: block.thinking })
           if (block.type === 'tool_use') {
